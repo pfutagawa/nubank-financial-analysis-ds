@@ -1,0 +1,8 @@
+dataset,period,source_type,source,notes
+financial_history,2021,primary,SEC / Nu Q4-FY21 Results,Official IFRS and operating metrics
+financial_history,2022-2024,primary,SEC / Nu Form 20-F 2024,Comparable annual operating and financial metrics
+financial_history,2025,primary,SEC / Nu Form 20-F 2025,Official annual financial and operating metrics
+capital_risk_history,2021-2025,regulatory,Banco Central do Brasil / Relatório de Pilar 3,Versioned source files stored locally under data/raw/pillar3
+risk_2025_detail,Q1-Q3 2025,regulatory analysis,Banco Central do Brasil / Relatório de Pilar 3,Local validated detail for selected risk components
+customer_complaints,academic sample,public consumer complaints,Reclame Aqui,Complementary academic sample stored locally; not treated as a 2021-2025 time series
+selic_history,reference macro series,primary,Banco Central do Brasil / SGS 4390,Versioned locally under data/raw/macro
