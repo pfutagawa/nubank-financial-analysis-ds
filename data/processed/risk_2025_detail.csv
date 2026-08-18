@@ -1,0 +1,4 @@
+quarter,period,capital_principal_brl_b,nivel_1_brl_b,patrimonio_referencia_brl_b,rwa_total_brl_b,icp_pct,basel_index_pct,capital_buffer_pct,rwa_credito_brl_b,rwa_juros_brl_m,rwa_cambio_brl_m,source_url
+Q1,2025-03-31,18.6793,20.4899,22.8304,135.4378,13.79,16.86,6.79,91.26,204.3,791.8,https://github.com/pfutagawa/nubank-financial-analysis-ds/tree/main/data/raw/pillar3/2025
+Q2,2025-06-30,18.3315,20.2156,22.6446,142.4126,12.87,15.90,5.87,97.62,28.1,522.1,https://github.com/pfutagawa/nubank-financial-analysis-ds/tree/main/data/raw/pillar3/2025
+Q3,2025-09-30,18.7309,20.5503,22.9913,157.6016,11.88,14.59,4.88,108.19,14.9,5128.8,https://github.com/pfutagawa/nubank-financial-analysis-ds/tree/main/data/raw/pillar3/2025

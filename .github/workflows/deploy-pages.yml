@@ -1,0 +1,83 @@
+name: Build and deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q app.py src
+
+      - name: Validate project datasets
+        run: python src/validate_data.py
+
+      - name: Build static dashboard payload
+        run: python -m src.build_web_data
+
+      - name: Validate web payload and JavaScript
+        shell: bash
+        run: |
+          node --check docs/js/dashboard.js
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload_path = Path("docs/data/dashboard-data.json")
+          assert payload_path.exists() and payload_path.stat().st_size > 0
+          data = json.loads(payload_path.read_text(encoding="utf-8"))
+          assert [row["year"] for row in data["financial"]] == [2021, 2022, 2023, 2024, 2025]
+          assert data["risk"], "A camada regulatória não pode estar vazia"
+          assert data["customer"]["total"] > 0, "A amostra de reclamações não pode estar vazia"
+          assert Path("docs/index.html").exists()
+          assert Path("docs/css/style.css").exists()
+          assert Path("docs/js/dashboard.js").exists()
+          print("Payload web e JavaScript validados com sucesso.")
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+          include-hidden-files: true
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
