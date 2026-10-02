@@ -1,0 +1,36 @@
+name: Coleta Diária de Cotações
+
+on:
+  schedule:
+    # Executa de segunda a sexta-feira às 22:00 UTC (19:00 no horário de Brasília - BRT),
+    # logo após o fechamento da B3 (17:00/18:00 BRT) e NYSE (16:00 EST / 21:00 UTC)
+    # Formato cron: minuto hora dia-do-mês mês dia-da-semana (1 = segunda-feira, 5 = sexta-feira)
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch: # Permite disparo manual diretamente pela aba Actions do GitHub
+
+jobs:
+  coleta-e-ingestao:
+    name: Ingestão de Cotações OHLCV
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar o ambiente Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar script de ingestão
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          python ingestao.py
