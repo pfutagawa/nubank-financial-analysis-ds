@@ -27,7 +27,9 @@ def main() -> None:
         sys.exit(1)
 
     # 2. Lista de tickers para extração
-    tickers = ["NU", "ITUB4.SA", "BBDC4.SA"]
+    # Obs: No plano gratuito da Twelve Data, ativos da B3 (ex: ITUB4, BBDC4) exigem plano pago.
+    # Para Itaú e Bradesco, utilize os ADRs listados na NYSE: ITUB e BBD.
+    tickers = ["NU", "ITUB", "BBD"]
     url = "https://api.twelvedata.com/time_series"
     dataframes: list[pd.DataFrame] = []
 
@@ -46,15 +48,17 @@ def main() -> None:
 
         try:
             response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            print(f"  ❌ Erro na requisição para '{ticker}': {e}", file=sys.stderr)
+            print(f"  ❌ Erro de conexão para '{ticker}': {e}", file=sys.stderr)
             continue
+        except Exception:
+            data = {}
 
         # Validação de erros na resposta da API
-        if data.get("status") == "error":
-            print(f"  ❌ Erro da API para '{ticker}': {data.get('message', 'Erro desconhecido')}", file=sys.stderr)
+        if response.status_code != 200 or data.get("status") == "error":
+            mensagem_erro = data.get("message", f"HTTP {response.status_code}")
+            print(f"  ❌ Erro da API para '{ticker}': {mensagem_erro}", file=sys.stderr)
             continue
 
         values = data.get("values")
