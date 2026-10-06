@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 import streamlit as st
 
 from src.data_pipeline import (
@@ -32,6 +36,13 @@ MUTED = "#6F6673"
 GRID = "#ECE7EF"
 POSITIVE = "#157A54"
 NEGATIVE = "#B42318"
+TICKER_COLORS = {
+    "NU": NU_PURPLE,
+    "ITUB": "#FF6B00",
+    "ITUB4.SA": "#FF6B00",
+    "BBD": "#CC092F",
+    "BBDC4.SA": "#CC092F",
+}
 
 st.markdown(
     f"""
@@ -74,6 +85,63 @@ st.markdown(
 )
 
 
+def _resolve_mongo_uri() -> str | None:
+    root_env = Path(__file__).resolve().parent / ".env"
+    parent_env = Path(__file__).resolve().parents[1] / ".env"
+    if root_env.exists():
+        load_dotenv(dotenv_path=root_env)
+    elif parent_env.exists():
+        load_dotenv(dotenv_path=parent_env)
+    else:
+        load_dotenv()
+
+    mongo_uri = os.getenv("MONGO_URI")
+    if mongo_uri:
+        return mongo_uri
+
+    try:
+        if "MONGO_URI" in st.secrets:
+            return str(st.secrets["MONGO_URI"])
+    except Exception:
+        pass
+    return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_historico_diario() -> tuple[pd.DataFrame, str | None]:
+    """Conecta ao MongoDB via MONGO_URI e extrai todos os documentos de historico_diario."""
+    mongo_uri = _resolve_mongo_uri()
+    if not mongo_uri:
+        return pd.DataFrame(), "MONGO_URI não encontrada nas variáveis de ambiente (.env)."
+
+    client = None
+    try:
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=8000)
+        db = client["nubank_db"]
+        collection = db["historico_diario"]
+        docs = list(collection.find({}, {"_id": 0}))
+    except PyMongoError as exc:
+        return pd.DataFrame(), f"Falha ao consultar o MongoDB ({type(exc).__name__})."
+    finally:
+        if client:
+            client.close()
+
+    if not docs:
+        return pd.DataFrame(), None
+
+    df = pd.DataFrame(docs)
+    if "datetime" in df.columns:
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "collected_at" in df.columns:
+        df["collected_at"] = pd.to_datetime(df["collected_at"], errors="coerce").astype(str)
+
+    df = df.dropna(subset=["ticker", "datetime", "close"]).sort_values(["ticker", "datetime"]).reset_index(drop=True)
+    return df, None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_data():
     financial = load_financial_history()
@@ -83,7 +151,22 @@ def get_data():
 
 
 financial, risk, risk_source, complaints, complaints_source = get_data()
+market_df, market_error = load_historico_diario()
 
+st.sidebar.markdown("### Ativos de Mercado (MongoDB)")
+available_tickers = (
+    sorted(market_df["ticker"].dropna().astype(str).unique().tolist())
+    if not market_df.empty and "ticker" in market_df.columns
+    else ["NU", "ITUB", "BBD"]
+)
+selected_tickers = st.sidebar.multiselect(
+    "Tickers para comparação",
+    options=available_tickers,
+    default=available_tickers,
+    help="Selecione um ou mais tickers extraídos da coleção historico_diario no MongoDB para comparar nos gráficos.",
+)
+
+st.sidebar.markdown("---")
 st.sidebar.markdown("### Período da análise")
 year_min, year_max = int(financial.year.min()), int(financial.year.max())
 years = st.sidebar.slider("Anos", year_min, year_max, (year_min, year_max))
@@ -93,8 +176,8 @@ fin = financial[financial.year.between(start_year, end_year)].copy()
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Escopo")
 st.sidebar.caption(
-    "A série financeira usa divulgações oficiais da Nu/SEC. A camada regulatória usa dados Pilar 3. "
-    "Reclamações são uma amostra acadêmica complementar e não uma série temporal comparável."
+    "Cotações diárias de mercado vêm do MongoDB (`nubank_db.historico_diario`) via extração histórica manual na Twelve Data API. "
+    "A série financeira usa divulgações oficiais da Nu/SEC e a camada regulatória usa dados Pilar 3."
 )
 
 st.markdown(
@@ -132,9 +215,138 @@ for col, values in zip(cols, card_data):
 
 st.caption(f"Indicadores do último ano selecionado: {int(latest.year)}. Valores financeiros em US$, salvo indicação em contrário.")
 
-tab_overview, tab_profit, tab_risk, tab_customer, tab_method = st.tabs(
-    ["Visão geral", "Rentabilidade e eficiência", "Capital e risco", "Experiência do cliente", "Metodologia"]
+tab_market, tab_overview, tab_profit, tab_risk, tab_customer, tab_method = st.tabs(
+    [
+        "Mercado e Cotações (MongoDB)",
+        "Visão geral",
+        "Rentabilidade e eficiência",
+        "Capital e risco",
+        "Experiência do cliente",
+        "Metodologia",
+    ]
 )
+
+with tab_market:
+    st.markdown("## Desempenho Histórico das Ações (`historico_diario`)")
+    st.markdown(
+        "<span class='source-chip'>MongoDB · nubank_db.historico_diario · Twelve Data API</span>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='section-note' style='margin-top:0.5rem;'>Comparação das séries históricas diárias extraídas manualmente para o MongoDB. Use o filtro <b>Tickers para comparação</b> na barra lateral para selecionar os ativos exibidos nos gráficos.</div>",
+        unsafe_allow_html=True,
+    )
+
+    if market_error:
+        st.error(f"Não foi possível carregar os dados do MongoDB: {market_error}")
+    elif market_df.empty:
+        st.info(
+            "A coleção `historico_diario` está vazia no momento. Execute `python ingestao.py` manualmente para realizar a carga histórica."
+        )
+    elif not selected_tickers:
+        st.warning("Selecione pelo menos um ticker no filtro da barra lateral para visualizar e comparar os gráficos.")
+    else:
+        filtered_market = market_df[market_df["ticker"].isin(selected_tickers)].copy()
+        filtered_market = filtered_market.sort_values(["ticker", "datetime"])
+
+        min_dt = filtered_market["datetime"].min()
+        max_dt = filtered_market["datetime"].max()
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Documentos filtrados", f"{len(filtered_market):,}".replace(",", "."))
+        m2.metric("Tickers comparados", ", ".join(selected_tickers))
+        m3.metric(
+            "Janela temporal",
+            f"{min_dt.strftime('%d/%m/%Y')} – {max_dt.strftime('%d/%m/%Y')}" if pd.notna(min_dt) and pd.notna(max_dt) else "N/D",
+        )
+
+        left_m, right_m = st.columns(2)
+        with left_m:
+            fig_close = px.line(
+                filtered_market,
+                x="datetime",
+                y="close",
+                color="ticker",
+                color_discrete_map=TICKER_COLORS,
+                title="Preço de fechamento diário (Close)",
+                labels={"datetime": "Data", "close": "Preço de fechamento (US$)", "ticker": "Ticker"},
+            )
+            fig_close.update_traces(line=dict(width=2.5))
+            fig_close.update_layout(
+                template="plotly_white",
+                height=420,
+                legend=dict(orientation="h", y=1.08, x=0),
+                margin=dict(l=20, r=20, t=75, b=20),
+            )
+            fig_close.update_xaxes(gridcolor=GRID)
+            fig_close.update_yaxes(gridcolor=GRID)
+            st.plotly_chart(fig_close, use_container_width=True)
+
+        with right_m:
+            norm_df = filtered_market.copy()
+            first_close = norm_df.groupby("ticker")["close"].transform("first")
+            norm_df["base_100"] = (norm_df["close"] / first_close) * 100.0
+
+            fig_norm = px.line(
+                norm_df,
+                x="datetime",
+                y="base_100",
+                color="ticker",
+                color_discrete_map=TICKER_COLORS,
+                title="Evolução comparativa normalizada (Base 100 no início da série)",
+                labels={"datetime": "Data", "base_100": "Índice (Base 100)", "ticker": "Ticker"},
+            )
+            fig_norm.add_hline(y=100, line_width=1, line_dash="dash", line_color="#999")
+            fig_norm.update_traces(line=dict(width=2.5))
+            fig_norm.update_layout(
+                template="plotly_white",
+                height=420,
+                legend=dict(orientation="h", y=1.08, x=0),
+                margin=dict(l=20, r=20, t=75, b=20),
+            )
+            fig_norm.update_xaxes(gridcolor=GRID)
+            fig_norm.update_yaxes(gridcolor=GRID)
+            st.plotly_chart(fig_norm, use_container_width=True)
+
+        fig_vol = px.line(
+            filtered_market,
+            x="datetime",
+            y="volume",
+            color="ticker",
+            color_discrete_map=TICKER_COLORS,
+            title="Volume diário negociado por ticker",
+            labels={"datetime": "Data", "volume": "Volume", "ticker": "Ticker"},
+        )
+        fig_vol.update_layout(
+            template="plotly_white",
+            height=360,
+            legend=dict(orientation="h", y=1.08, x=0),
+            margin=dict(l=20, r=20, t=75, b=20),
+        )
+        fig_vol.update_xaxes(gridcolor=GRID)
+        fig_vol.update_yaxes(gridcolor=GRID)
+        st.plotly_chart(fig_vol, use_container_width=True)
+
+        summary_rows = []
+        for tkr, grp in filtered_market.groupby("ticker", sort=True):
+            grp_sorted = grp.sort_values("datetime")
+            first_val = float(grp_sorted["close"].iloc[0])
+            last_val = float(grp_sorted["close"].iloc[-1])
+            ret_pct = ((last_val / first_val) - 1.0) * 100.0 if first_val else 0.0
+            summary_rows.append(
+                {
+                    "Ticker": tkr,
+                    "Pregões": len(grp_sorted),
+                    "Data Inicial": grp_sorted["datetime"].iloc[0].strftime("%Y-%m-%d"),
+                    "Data Final": grp_sorted["datetime"].iloc[-1].strftime("%Y-%m-%d"),
+                    "Fechamento Inicial (US$)": round(first_val, 2),
+                    "Último Fechamento (US$)": round(last_val, 2),
+                    "Mínima no Período (US$)": round(float(grp_sorted["low"].min()), 2),
+                    "Máxima no Período (US$)": round(float(grp_sorted["high"].max()), 2),
+                    "Retorno Acumulado (%)": round(ret_pct, 2),
+                }
+            )
+        st.markdown("### Resumo estatístico dos tickers selecionados")
+        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
 with tab_overview:
     st.markdown("## Crescimento que se converteu em monetização")

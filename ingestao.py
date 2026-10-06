@@ -176,7 +176,7 @@ def main() -> int:
             "symbol": ticker,
             "interval": "1day",
             "apikey": api_key,
-            "outputsize": 30,
+            "outputsize": 1000,
         }
 
         try:
@@ -232,7 +232,7 @@ def main() -> int:
         for rej in rejected_records[:3]:
             print(f"  • {rej['ticker']} (data: {rej['raw']}): {rej['reason']}")
 
-    # 4. Operação no MongoDB (upsert em lote)
+    # 4. Operação no MongoDB (carga histórica profunda com substituição da base)
     client = None
     try:
         client = MongoClient(mongo_uri)
@@ -241,34 +241,27 @@ def main() -> int:
         db = client["nubank_db"]
         collection = db["historico_diario"]
 
-        # Garante o índice único antes da gravação
-        if not ensure_unique_index(collection):
-            return 1
-
         if not valid_records:
             print("Nenhum registro válido para gravar no banco.", file=sys.stderr)
             return 1 if failed_tickers else 0
 
-        # Monta operações de UpdateOne com upsert=True por chave (ticker, datetime)
-        operations = [
-            UpdateOne(
-                {"ticker": doc["ticker"], "datetime": doc["datetime"]},
-                {"$set": doc},
-                upsert=True,
-            )
-            for doc in valid_records
-        ]
+        # Remove duplicatas em memória por (ticker, datetime) antes da inserção
+        deduped_map = {(doc["ticker"], doc["datetime"]): doc for doc in valid_records}
+        records_to_insert = list(deduped_map.values())
 
-        bulk_result = collection.bulk_write(operations, ordered=False)
+        # Limpa a coleção antes de inserir a nova carga histórica completa
+        delete_result = collection.delete_many({})
 
-        inserted_count = bulk_result.upserted_count
-        modified_count = bulk_result.modified_count
-        matched_count = bulk_result.matched_count
+        # Garante o índice composto único em ('ticker', 'datetime')
+        if not ensure_unique_index(collection):
+            return 1
 
-        print("\n📊 Resultado da ingestão no MongoDB:")
-        print(f"  • Documentos novos inseridos: {inserted_count}")
-        print(f"  • Documentos existentes atualizados: {modified_count}")
-        print(f"  • Documentos correspondentes sem alteração: {matched_count - modified_count}")
+        insert_result = collection.insert_many(records_to_insert, ordered=False)
+        inserted_count = len(insert_result.inserted_ids)
+
+        print("\n📊 Resultado da ingestão histórica no MongoDB:")
+        print(f"  • Documentos antigos removidos: {delete_result.deleted_count}")
+        print(f"  • Documentos históricos inseridos: {inserted_count}")
         print(f"  • Registros rejeitados na validação: {len(rejected_records)}")
 
     except PyMongoError as e:
