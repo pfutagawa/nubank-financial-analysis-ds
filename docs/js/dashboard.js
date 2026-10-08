@@ -266,6 +266,119 @@ function escapeHtml(value) {
   }[char]));
 }
 
+const TICKER_COLORS = {
+  NU: PURPLE,
+  ITUB: '#FF6B00',
+  'ITUB4.SA': '#FF6B00',
+  BBD: '#CC092F',
+  'BBDC4.SA': '#CC092F',
+};
+
+function renderMarket(data) {
+  const market = Array.isArray(data.market) ? data.market : [];
+  const filterWrap = document.getElementById('ticker-filter-options');
+  const section = document.getElementById('mercado');
+  if (!filterWrap || !section) return;
+
+  if (!market.length) {
+    filterWrap.innerHTML = '<span style="font-size:.82rem;color:#6f6673">Execute python ingestao.py para popular as cotações históricas.</span>';
+    return;
+  }
+
+  const tickers = [...new Set(market.map(r => r.ticker).filter(Boolean))].sort();
+  const selected = new Set(tickers);
+
+  function updateMarketCharts() {
+    const activeTickers = tickers.filter(t => selected.has(t));
+    const closeTraces = [];
+    const normTraces = [];
+    const volTraces = [];
+
+    for (const ticker of activeTickers) {
+      const rows = market
+        .filter(r => r.ticker === ticker && r.datetime && r.close != null)
+        .sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
+      if (!rows.length) continue;
+
+      const x = rows.map(r => r.datetime);
+      const yClose = rows.map(r => Number(r.close));
+      const firstClose = yClose[0] || 1;
+      const yNorm = yClose.map(v => (v / firstClose) * 100);
+      const yVol = rows.map(r => Number(r.volume || 0));
+      const color = TICKER_COLORS[ticker] || PURPLE_MID;
+
+      closeTraces.push({
+        type: 'scatter',
+        mode: 'lines',
+        name: ticker,
+        x,
+        y: yClose,
+        line: { color, width: 2.5 },
+        hovertemplate: `<b>${escapeHtml(ticker)}</b> · %{x}<br>Fechamento: US$ %{y:.2f}<extra></extra>`,
+      });
+
+      normTraces.push({
+        type: 'scatter',
+        mode: 'lines',
+        name: ticker,
+        x,
+        y: yNorm,
+        line: { color, width: 2.5 },
+        hovertemplate: `<b>${escapeHtml(ticker)}</b> · %{x}<br>Índice: %{y:.1f} (Base 100)<extra></extra>`,
+      });
+
+      volTraces.push({
+        type: 'scatter',
+        mode: 'lines',
+        name: ticker,
+        x,
+        y: yVol,
+        line: { color, width: 1.8 },
+        hovertemplate: `<b>${escapeHtml(ticker)}</b> · %{x}<br>Volume: %{y:,.0f}<extra></extra>`,
+      });
+    }
+
+    safePlot('chart-market-close', closeTraces, layout({
+      yaxis: { title: 'US$ (Fechamento)', gridcolor: GRID },
+      xaxis: { type: 'date', gridcolor: GRID },
+    }));
+
+    safePlot('chart-market-norm', normTraces, layout({
+      yaxis: { title: 'Índice (Base 100)', gridcolor: GRID },
+      xaxis: { type: 'date', gridcolor: GRID },
+    }));
+
+    safePlot('chart-market-volume', volTraces, layout({
+      yaxis: { title: 'Volume diário', gridcolor: GRID },
+      xaxis: { type: 'date', gridcolor: GRID },
+    }));
+  }
+
+  filterWrap.innerHTML = tickers.map(t => `
+    <label class="ticker-chip active">
+      <input type="checkbox" value="${escapeHtml(t)}" checked>
+      <span>${escapeHtml(t)}</span>
+    </label>
+  `).join('');
+
+  filterWrap.querySelectorAll('input[type="checkbox"]').forEach(input => {
+    input.addEventListener('change', e => {
+      const val = e.target.value;
+      const chip = e.target.closest('.ticker-chip');
+      if (e.target.checked) {
+        selected.add(val);
+        if (chip) chip.classList.add('active');
+      } else {
+        selected.delete(val);
+        if (chip) chip.classList.remove('active');
+      }
+      updateMarketCharts();
+    });
+  });
+
+  updateMarketCharts();
+}
+
 function renderSources(data) {
   const body = document.getElementById('source-table');
   body.innerHTML = data.sources.map(row => `
@@ -285,6 +398,7 @@ async function init() {
     const data = await response.json();
 
     renderHeadline(data);
+    renderMarket(data);
     renderGrowth(data);
     renderProfitability(data);
     renderRisk(data);

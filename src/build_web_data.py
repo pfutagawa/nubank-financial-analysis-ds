@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 import pandas as pd
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 from src.data_pipeline import (
     customer_summary,
@@ -16,6 +20,7 @@ from src.data_pipeline import (
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "data" / "dashboard-data.json"
+MARKET_CSV = ROOT / "data" / "processed" / "market_history.csv"
 
 
 def clean_value(value: Any) -> Any:
@@ -35,12 +40,50 @@ def records(df: pd.DataFrame) -> list[dict[str, Any]]:
     ]
 
 
+def load_market_history() -> pd.DataFrame:
+    """Carrega historico_diario do MongoDB (se MONGO_URI disponível) ou do snapshot market_history.csv."""
+    for env_candidate in (ROOT / ".env", ROOT.parent / ".env"):
+        if env_candidate.exists():
+            load_dotenv(dotenv_path=env_candidate)
+            break
+
+    mongo_uri = os.getenv("MONGO_URI")
+    docs: list[dict[str, Any]] = []
+    if mongo_uri:
+        client = None
+        try:
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+            collection = client["nubank_db"]["historico_diario"]
+            docs = list(collection.find({}, {"_id": 0, "ticker": 1, "datetime": 1, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}))
+        except PyMongoError:
+            docs = []
+        finally:
+            if client:
+                client.close()
+
+    if docs:
+        df = pd.DataFrame(docs)
+        if MARKET_CSV.parent.exists():
+            df.sort_values(["ticker", "datetime"]).to_csv(MARKET_CSV, index=False)
+    elif MARKET_CSV.exists():
+        df = pd.read_csv(MARKET_CSV)
+    else:
+        return pd.DataFrame(columns=["ticker", "datetime", "open", "high", "low", "close", "volume"])
+
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["ticker", "datetime", "close"]).sort_values(["ticker", "datetime"]).reset_index(drop=True)
+    return df[["ticker", "datetime", "open", "high", "low", "close", "volume"]]
+
+
 def build_payload() -> dict[str, Any]:
     financial = load_financial_history()
     risk, risk_source = load_capital_risk_history()
     complaints, complaints_source = load_customer_sample()
     risk_detail = pd.read_csv(ROOT / "data" / "processed" / "risk_2025_detail.csv")
     manifest = pd.read_csv(ROOT / "data" / "source_manifest.csv")
+    market = load_market_history()
 
     summary = customer_summary(complaints)
     latest = financial.iloc[-1]
@@ -70,7 +113,7 @@ def build_payload() -> dict[str, Any]:
         "meta": {
             "title": "Nubank em Dados",
             "period": "2021–2025",
-            "generated_from": "datasets versionados no próprio repositório",
+            "generated_from": "datasets versionados no próprio repositório e MongoDB (historico_diario)",
             "risk_source": risk_source,
         },
         "headline": {
@@ -83,6 +126,7 @@ def build_payload() -> dict[str, Any]:
             "revenue_multiple": round(float(latest["revenue_usd_b"] / first["revenue_usd_b"]), 1),
             "deposit_multiple": round(float(latest["deposits_usd_b"] / first["deposits_usd_b"]), 1),
         },
+        "market": records(market),
         "financial": records(financial),
         "risk": records(risk),
         "risk_2025": records(risk_detail),

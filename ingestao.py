@@ -249,6 +249,13 @@ def main() -> int:
         deduped_map = {(doc["ticker"], doc["datetime"]): doc for doc in valid_records}
         records_to_insert = list(deduped_map.values())
 
+        # Exporta snapshot local em CSV para alimentar o build estático do GitHub Pages (github.io)
+        processed_dir = Path(__file__).resolve().parent / "data" / "processed"
+        if processed_dir.exists():
+            csv_df = pd.DataFrame(records_to_insert).drop(columns=["_id"], errors="ignore")
+            csv_df = csv_df.sort_values(["ticker", "datetime"]).reset_index(drop=True)
+            csv_df.to_csv(processed_dir / "market_history.csv", index=False)
+
         # Limpa a coleção antes de inserir a nova carga histórica completa
         delete_result = collection.delete_many({})
 

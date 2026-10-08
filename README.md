@@ -1,33 +1,32 @@
-# Nubank em Dados — Crescimento, Rentabilidade e Risco (2021–2025)
+# Nubank em Dados — Crescimento, Rentabilidade, Risco e Mercado (2021–2025)
 
-Projeto de portfólio em Ciência de Dados e Analytics que integra métricas financeiras oficiais da Nu Holdings, dados regulatórios do Pilar 3 e uma amostra complementar de reclamações públicas para responder a uma pergunta central:
+[![Dashboard Online (GitHub Pages)](https://img.shields.io/badge/🌐_Dashboard_Online-pfutagawa.github.io-820AD1?style=for-the-badge)](https://pfutagawa.github.io/nubank-financial-analysis-ds/)
 
-> **Como o crescimento do Nubank entre 2021 e 2025 se traduziu em monetização e rentabilidade — e quais sinais de capital, risco e experiência do cliente acompanharam essa expansão?**
+👉 **Acesse o dashboard interativo no GitHub Pages:** [**https://pfutagawa.github.io/nubank-financial-analysis-ds/**](https://pfutagawa.github.io/nubank-financial-analysis-ds/)
+
+Projeto de portfólio em Ciência de Dados e Analytics que integra cotações históricas de mercado (MongoDB + Twelve Data API), métricas financeiras oficiais da Nu Holdings, dados regulatórios do Pilar 3 e uma amostra complementar de reclamações públicas para responder a uma pergunta central:
+
+> **Como o crescimento do Nubank entre 2021 e 2025 se traduziu em monetização, rentabilidade e desempenho de mercado — e quais sinais de capital, risco e experiência do cliente acompanharam essa expansão?**
 
 ## Duas interfaces, uma única camada de dados
 
 O projeto possui duas formas de consumo construídas sobre os mesmos datasets tratados:
 
-- **Streamlit / Python:** versão analítica completa para exploração local, com filtro de período e abas temáticas.
-- **GitHub Pages:** versão pública responsiva para acesso imediato no navegador, sem instalação ou ambiente Python.
-
-A URL pública preparada para o deploy é:
-
-`https://pfutagawa.github.io/nubank-financial-analysis-ds/`
-
-O site será publicado automaticamente pelo GitHub Actions após uma futura integração da versão aprovada à `main`.
+- **GitHub Pages (`github.io`):** [**https://pfutagawa.github.io/nubank-financial-analysis-ds/**](https://pfutagawa.github.io/nubank-financial-analysis-ds/) — versão pública responsiva e interativa para acesso imediato no navegador, sem necessidade de instalação.
+- **Streamlit / Python (`app.py`):** versão analítica local conectada ao MongoDB (`nubank_db.historico_diario`), com filtros interativos na barra lateral e abas temáticas.
 
 ## Produto analítico
 
-A análise combina **Python, Pandas, SQL, SQLite, Plotly, Streamlit, HTML/CSS e JavaScript**, com fontes rastreáveis e validação automatizada.
+A análise combina **Python, Pandas, MongoDB (PyMongo), SQL, SQLite, Plotly, Streamlit, HTML/CSS e JavaScript**, com fontes rastreáveis e validação automatizada.
 
-O produto está organizado em cinco frentes:
+O produto está organizado em seis frentes:
 
-1. **Visão geral** — clientes, receita, depósitos, ARPAC e carteiras de crédito.
-2. **Rentabilidade e eficiência** — lucro líquido, margens e comparação entre métricas IFRS e ajustadas.
-3. **Capital e risco** — Capital Principal, RWA, Índice de Basileia, ICP e componentes de risco.
-4. **Experiência do cliente** — categorias, severidade e clusters de uma amostra acadêmica de reclamações públicas.
-5. **Metodologia** — fontes, unidades, arquitetura e limitações.
+1. **Mercado e Cotações (MongoDB)** — série histórica longa (`outputsize=1000`) de `NU`, `ITUB` e `BBD`, com filtro interativo de tickers, preço de fechamento, desempenho normalizado (Base 100) e volume negociado.
+2. **Visão geral** — clientes, receita, depósitos, ARPAC e carteiras de crédito.
+3. **Rentabilidade e eficiência** — lucro líquido, margens e comparação entre métricas IFRS e ajustadas.
+4. **Capital e risco** — Capital Principal, RWA, Índice de Basileia, ICP e componentes de risco.
+5. **Experiência do cliente** — categorias, severidade e clusters de uma amostra acadêmica de reclamações públicas.
+6. **Metodologia** — fontes, unidades, arquitetura e limitações.
 
 ## Principais indicadores da série
 

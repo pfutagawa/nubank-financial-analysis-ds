@@ -110,26 +110,34 @@ def _resolve_mongo_uri() -> str | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_historico_diario() -> tuple[pd.DataFrame, str | None]:
     """Conecta ao MongoDB via MONGO_URI e extrai todos os documentos de historico_diario."""
+    fallback_csv = Path(__file__).resolve().parent / "data" / "processed" / "market_history.csv"
     mongo_uri = _resolve_mongo_uri()
-    if not mongo_uri:
-        return pd.DataFrame(), "MONGO_URI não encontrada nas variáveis de ambiente (.env)."
+    docs: list[dict] = []
+    mongo_err: str | None = None
 
-    client = None
-    try:
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=8000)
-        db = client["nubank_db"]
-        collection = db["historico_diario"]
-        docs = list(collection.find({}, {"_id": 0}))
-    except PyMongoError as exc:
-        return pd.DataFrame(), f"Falha ao consultar o MongoDB ({type(exc).__name__})."
-    finally:
-        if client:
-            client.close()
+    if mongo_uri:
+        client = None
+        try:
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+            db = client["nubank_db"]
+            collection = db["historico_diario"]
+            docs = list(collection.find({}, {"_id": 0}))
+        except PyMongoError as exc:
+            mongo_err = f"Falha ao consultar o MongoDB ({type(exc).__name__})."
+        finally:
+            if client:
+                client.close()
+    else:
+        mongo_err = "MONGO_URI não encontrada nas variáveis de ambiente (.env)."
 
-    if not docs:
-        return pd.DataFrame(), None
+    if docs:
+        df = pd.DataFrame(docs)
+    elif fallback_csv.exists():
+        df = pd.read_csv(fallback_csv)
+        mongo_err = None
+    else:
+        return pd.DataFrame(), mongo_err
 
-    df = pd.DataFrame(docs)
     if "datetime" in df.columns:
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce")
     for col in ("open", "high", "low", "close", "volume"):
@@ -139,6 +147,8 @@ def load_historico_diario() -> tuple[pd.DataFrame, str | None]:
         df["collected_at"] = pd.to_datetime(df["collected_at"], errors="coerce").astype(str)
 
     df = df.dropna(subset=["ticker", "datetime", "close"]).sort_values(["ticker", "datetime"]).reset_index(drop=True)
+    if docs and not df.empty and fallback_csv.parent.exists() and not fallback_csv.exists():
+        df.assign(datetime=df["datetime"].dt.strftime("%Y-%m-%d")).to_csv(fallback_csv, index=False)
     return df, None
 
 
