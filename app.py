@@ -107,6 +107,20 @@ def _resolve_mongo_uri() -> str | None:
     return None
 
 
+def _configure_dns() -> None:
+    """Configura DNS público (8.8.8.8 / 1.1.1.1) no dnspython para evitar ConfigurationError do 127.0.0.53 em URIs mongodb+srv://."""
+    try:
+        import dns.resolver
+
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
+        resolver.timeout = 1.5
+        resolver.lifetime = 3.0
+        dns.resolver.default_resolver = resolver
+    except Exception:
+        pass
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def load_historico_diario() -> tuple[pd.DataFrame, str | None]:
     """Conecta ao MongoDB via MONGO_URI e extrai todos os documentos de historico_diario."""
@@ -116,9 +130,10 @@ def load_historico_diario() -> tuple[pd.DataFrame, str | None]:
     mongo_err: str | None = None
 
     if mongo_uri:
+        _configure_dns()
         client = None
         try:
-            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2500, connectTimeoutMS=2500)
             db = client["nubank_db"]
             collection = db["historico_diario"]
             docs = list(collection.find({}, {"_id": 0}))

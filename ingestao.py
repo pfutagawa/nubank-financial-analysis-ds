@@ -232,29 +232,43 @@ def main() -> int:
         for rej in rejected_records[:3]:
             print(f"  • {rej['ticker']} (data: {rej['raw']}): {rej['reason']}")
 
+    if not valid_records:
+        print("Nenhum registro válido para gravar no banco.", file=sys.stderr)
+        return 1 if failed_tickers else 0
+
+    # Remove duplicatas em memória por (ticker, datetime) antes da inserção
+    deduped_map = {(doc["ticker"], doc["datetime"]): doc for doc in valid_records}
+    records_to_insert = list(deduped_map.values())
+
+    # Exporta snapshot local em CSV para alimentar o dashboard e o build estático do GitHub Pages (github.io)
+    for candidate_dir in (
+        Path(__file__).resolve().parent / "data" / "processed",
+        Path(__file__).resolve().parent / "nubank-financial-analysis-ds" / "data" / "processed",
+    ):
+        if candidate_dir.exists():
+            csv_df = pd.DataFrame(records_to_insert).drop(columns=["_id"], errors="ignore")
+            csv_df = csv_df.sort_values(["ticker", "datetime"]).reset_index(drop=True)
+            csv_df.to_csv(candidate_dir / "market_history.csv", index=False)
+
     # 4. Operação no MongoDB (carga histórica profunda com substituição da base)
+    try:
+        import dns.resolver
+
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
+        resolver.timeout = 3.0
+        resolver.lifetime = 6.0
+        dns.resolver.default_resolver = resolver
+    except Exception:
+        pass
+
     client = None
     try:
-        client = MongoClient(mongo_uri)
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=8000, connectTimeoutMS=8000)
         client.admin.command("ping")
 
         db = client["nubank_db"]
         collection = db["historico_diario"]
-
-        if not valid_records:
-            print("Nenhum registro válido para gravar no banco.", file=sys.stderr)
-            return 1 if failed_tickers else 0
-
-        # Remove duplicatas em memória por (ticker, datetime) antes da inserção
-        deduped_map = {(doc["ticker"], doc["datetime"]): doc for doc in valid_records}
-        records_to_insert = list(deduped_map.values())
-
-        # Exporta snapshot local em CSV para alimentar o build estático do GitHub Pages (github.io)
-        processed_dir = Path(__file__).resolve().parent / "data" / "processed"
-        if processed_dir.exists():
-            csv_df = pd.DataFrame(records_to_insert).drop(columns=["_id"], errors="ignore")
-            csv_df = csv_df.sort_values(["ticker", "datetime"]).reset_index(drop=True)
-            csv_df.to_csv(processed_dir / "market_history.csv", index=False)
 
         # Limpa a coleção antes de inserir a nova carga histórica completa
         delete_result = collection.delete_many({})

@@ -40,6 +40,20 @@ def records(df: pd.DataFrame) -> list[dict[str, Any]]:
     ]
 
 
+def _configure_dns() -> None:
+    """Configura DNS público (Google/Cloudflare) no dnspython para evitar timeout do 127.0.0.53 em queries SRV do mongodb+srv://."""
+    try:
+        import dns.resolver
+
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
+        resolver.timeout = 3.0
+        resolver.lifetime = 6.0
+        dns.resolver.default_resolver = resolver
+    except Exception:
+        pass
+
+
 def load_market_history() -> pd.DataFrame:
     """Carrega historico_diario do MongoDB (se MONGO_URI disponível) ou do snapshot market_history.csv."""
     for env_candidate in (ROOT / ".env", ROOT.parent / ".env"):
@@ -50,12 +64,14 @@ def load_market_history() -> pd.DataFrame:
     mongo_uri = os.getenv("MONGO_URI")
     docs: list[dict[str, Any]] = []
     if mongo_uri:
+        _configure_dns()
         client = None
         try:
-            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=8000, connectTimeoutMS=8000)
             collection = client["nubank_db"]["historico_diario"]
             docs = list(collection.find({}, {"_id": 0, "ticker": 1, "datetime": 1, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}))
-        except PyMongoError:
+        except PyMongoError as exc:
+            print(f"Aviso MongoDB ({type(exc).__name__}): usando fallback local se disponível.")
             docs = []
         finally:
             if client:
