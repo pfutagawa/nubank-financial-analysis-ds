@@ -5,3 +5,4 @@ periodo_fim,ano,trimestre,parcial,receita,lucro_liquido_ifrs,clientes,depositos,
 2025-12-31,2025,4T25,não,4.6859,0.8948,131.0,41.9,32.7,18.5,15.0,0.8,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426002166/nuform20f_2025.htm
 2026-03-31,2026,1T26,sim,4.9680,0.8714,135.2,42.4,37.2,,15.9,1.0,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426003053/nufs1q26_6k.htm
 2026-06-30,2026,2T26,sim,5.5132,1.0611,139.0,45.3,39.4,,17.1,1.0,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426004222/nufs2q26_6k.htm
+

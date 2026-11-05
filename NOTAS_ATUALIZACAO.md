@@ -98,3 +98,4 @@ A validação automatizada em `src/validate_data.py` (`validate_financial_quarte
 2. Adicione a linha anual consolidada de `2026` em `data/processed/financial_history.csv` com a URL oficial do `Form 20-F 2026` na SEC.
 3. Em `src/validate_data.py`, atualize a lista de anos fechados esperados para `[2021, 2022, 2023, 2024, 2025, 2026]` e inclua `2026` na verificação de reconciliação trimestral vs. 20-F (`RECONCILIATION_TOLERANCE_USD_B = 0.01`).
 4. Regere o banco SQLite e o payload web (`build_database.py` e `python -m src.build_web_data`) e rode a suíte de testes.
+

@@ -65,3 +65,4 @@ SELECT
     icp_pct,
     capital_buffer_pct
 FROM vw_latest_stocks_and_prudential;
+
