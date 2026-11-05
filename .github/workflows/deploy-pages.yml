@@ -2,7 +2,7 @@ name: Build and deploy GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -35,13 +35,22 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app.py ingestao.py src
 
-      - name: Validate project datasets
+      - name: Ingest Pillar 3 regulatory history
+        run: python src/ingest_pillar3.py
+
+      - name: Validate project datasets (2021-2026*)
         run: python src/validate_data.py
+
+      - name: Build SQLite analytical database
+        run: python src/build_database.py
 
       - name: Build static dashboard payload
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: python -m src.build_web_data
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
 
       - name: Validate web payload and JavaScript
         shell: bash
@@ -55,6 +64,9 @@ jobs:
           assert payload_path.exists() and payload_path.stat().st_size > 0
           data = json.loads(payload_path.read_text(encoding="utf-8"))
           assert [row["year"] for row in data["financial"]] == [2021, 2022, 2023, 2024, 2025]
+          assert "financial_quarterly" in data and len(data["financial_quarterly"]) >= 6
+          assert "metrics_2026" in data and data["metrics_2026"]["reference_quarter"] in {"2T26", "3T26", "4T26"}
+          assert "views" in data and {"closed_years", "ltm", "ytd_comparison"}.issubset(set(data["views"].keys()))
           assert "market" in data, "Chave market ausente no payload web"
           assert data["risk"], "A camada regulatória não pode estar vazia"
           assert data["customer"]["total"] > 0, "A amostra de reclamações não pode estar vazia"
@@ -65,9 +77,11 @@ jobs:
           PY
 
       - name: Configure Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs

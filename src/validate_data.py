@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / "data" / "processed"
 RAW = ROOT / "data" / "raw"
 
+VALID_CURRENCIES = {"USD", "BRL"}
+RECONCILIATION_TOLERANCE_USD_B = 0.01
+
 
 def validate_financial_history() -> None:
     df = pd.read_csv(PROCESSED / "financial_history.csv")
@@ -29,21 +32,106 @@ def validate_financial_history() -> None:
     }
     missing = required - set(df.columns)
     assert not missing, f"Colunas ausentes em financial_history: {sorted(missing)}"
-    assert df["year"].tolist() == [2021, 2022, 2023, 2024, 2025], "A série deve cobrir 2021–2025 sem lacunas anuais"
-    assert df["year"].is_unique, "Ano duplicado na série financeira"
+    assert df["year"].tolist() == [2021, 2022, 2023, 2024, 2025], "A série anual fechada deve cobrir 2021–2025 sem lacunas"
+    assert df["year"].is_unique, "Ano duplicado na série financeira anual"
     assert (df["customers_m"] > 0).all()
     assert df["activity_rate_pct"].between(0, 100).all()
     assert (df["revenue_usd_b"] > 0).all()
     assert (df["deposits_usd_b"] > 0).all()
+    assert df["source_url"].notna().all() and (df["source_url"].astype(str).str.strip() != "").all()
     assert df["source_url"].str.startswith("https://www.sec.gov/").all(), "A série financeira deve apontar para fontes SEC/Nu primárias"
+
+
+def validate_financial_quarterly() -> dict[str, float]:
+    """Valida a série trimestral 1T25–2T26* e reconcilia os 4 trimestres de 2025 com o 20-F 2025."""
+    q_path = PROCESSED / "financial_quarterly.csv"
+    assert q_path.exists(), f"Arquivo trimestral ausente: {q_path}"
+    q_df = pd.read_csv(q_path)
+
+    required_cols = {
+        "periodo_fim",
+        "ano",
+        "trimestre",
+        "parcial",
+        "receita",
+        "lucro_liquido_ifrs",
+        "clientes",
+        "depositos",
+        "carteira_credito",
+        "carteira_credito_juros",
+        "arpac_mensal",
+        "custo_servir_mensal",
+        "moeda",
+        "unidade",
+        "fonte_url",
+    }
+    missing = required_cols - set(q_df.columns)
+    assert not missing, f"Colunas mínimas ausentes em financial_quarterly.csv: {sorted(missing)}"
+
+    # (b) Não há períodos duplicados
+    assert q_df["periodo_fim"].is_unique, "Existem datas de periodo_fim duplicadas em financial_quarterly.csv"
+    assert q_df["trimestre"].is_unique, "Existem trimestres duplicados em financial_quarterly.csv"
+
+    # (c) Todo período de 2026 tem parcial = sim (e anos fechados <= 2025 têm parcial = não)
+    q_2026 = q_df[q_df["ano"] == 2026]
+    assert not q_2026.empty, "A série trimestral deve conter os períodos disponíveis de 2026"
+    assert (q_2026["parcial"] == "sim").all(), "Todo período de 2026 deve ter parcial = sim"
+
+    q_closed = q_df[q_df["ano"] <= 2025]
+    assert (q_closed["parcial"] == "não").all(), "Períodos de anos fechados (<= 2025) devem ter parcial = não"
+
+    # (d) Unidades e moedas válidas
+    assert set(q_df["moeda"].dropna().unique()).issubset(VALID_CURRENCIES), f"Moedas inválidas: {q_df['moeda'].unique()}"
+    assert (q_df["moeda"] == "USD").all(), "Os resultados financeiros da Nu devem estar preservados em USD"
+    assert q_df["unidade"].notna().all() and (q_df["unidade"].astype(str).str.strip() != "").all(), "Coluna unidade vazia"
+
+    # (e) Toda linha tem fonte_url válida da SEC
+    assert q_df["fonte_url"].notna().all(), "Há linhas sem fonte_url em financial_quarterly.csv"
+    assert (q_df["fonte_url"].astype(str).str.strip() != "").all(), "Há fonte_url em branco em financial_quarterly.csv"
+    assert q_df["fonte_url"].astype(str).str.startswith("https://www.sec.gov/").all(), (
+        "Toda fonte_url em financial_quarterly.csv deve apontar para documento oficial na SEC"
+    )
+
+    # (a) Reconciliação 2025: soma dos 4 trimestres de 2025 bate com o total anual do 20-F 2025 (tolerância 0,01 bi)
+    q_2025 = q_df[q_df["ano"] == 2025]
+    assert len(q_2025) == 4, f"Esperados 4 trimestres para 2025, encontrados {len(q_2025)}"
+
+    annual_df = pd.read_csv(PROCESSED / "financial_history.csv")
+    row_2025 = annual_df[annual_df["year"] == 2025].iloc[0]
+
+    sum_rev_2025 = float(q_2025["receita"].sum())
+    annual_rev_2025 = float(row_2025["revenue_usd_b"])
+    diff_rev = abs(sum_rev_2025 - annual_rev_2025)
+    assert diff_rev <= RECONCILIATION_TOLERANCE_USD_B, (
+        f"Reconciliação de receita 2025 falhou: soma trimestral={sum_rev_2025:.4f} vs 20-F={annual_rev_2025:.4f} "
+        f"(diferença={diff_rev:.4f} > {RECONCILIATION_TOLERANCE_USD_B})"
+    )
+
+    sum_net_2025 = float(q_2025["lucro_liquido_ifrs"].sum())
+    annual_net_2025 = float(row_2025["net_income_usd_b"])
+    diff_net = abs(sum_net_2025 - annual_net_2025)
+    assert diff_net <= RECONCILIATION_TOLERANCE_USD_B, (
+        f"Reconciliação de lucro líquido IFRS 2025 falhou: soma trimestral={sum_net_2025:.4f} vs 20-F={annual_net_2025:.4f} "
+        f"(diferença={diff_net:.4f} > {RECONCILIATION_TOLERANCE_USD_B})"
+    )
+
+    return {
+        "sum_revenue_2025": round(sum_rev_2025, 4),
+        "annual_revenue_2025": round(annual_rev_2025, 4),
+        "diff_revenue_2025": round(diff_rev, 4),
+        "sum_net_income_2025": round(sum_net_2025, 4),
+        "annual_net_income_2025": round(annual_net_2025, 4),
+        "diff_net_income_2025": round(diff_net, 4),
+    }
 
 
 def validate_vendored_sources() -> None:
     xlsx = sorted((RAW / "pillar3").glob("20*/*.xlsx"))
-    assert len(xlsx) == 18, f"Esperados 18 arquivos regulatórios locais; encontrados {len(xlsx)}"
+    assert len(xlsx) >= 18, f"Esperados ao menos 18 arquivos regulatórios locais; encontrados {len(xlsx)}"
 
     years = {path.parent.name for path in xlsx}
-    assert years == {"2021", "2022", "2023", "2024", "2025"}, f"Cobertura regulatória incompleta: {sorted(years)}"
+    assert {"2021", "2022", "2023", "2024", "2025"}.issubset(years), f"Cobertura regulatória incompleta: {sorted(years)}"
+    assert years.issubset({"2021", "2022", "2023", "2024", "2025", "2026"}), f"Pastas inesperadas: {sorted(years)}"
 
     complaints_path = RAW / "customer" / "reclamacoes_com_insights.csv"
     assert complaints_path.exists(), "A amostra local de reclamações está ausente"
@@ -72,19 +160,45 @@ def validate_risk_detail() -> None:
         "icp_pct",
         "basel_index_pct",
         "rwa_credito_brl_b",
+        "source_url",
     }
     missing = required - set(df.columns)
     assert not missing, f"Colunas ausentes em risk_2025_detail: {sorted(missing)}"
-    assert df["quarter"].tolist() == ["Q1", "Q2", "Q3"]
+    assert set(df["quarter"].tolist()).issuperset({"Q1", "Q2", "Q3"})
+    assert df["period"].is_unique, "Período duplicado em risk_2025_detail"
     assert (df["capital_principal_brl_b"] > 0).all()
     assert (df["rwa_total_brl_b"] > 0).all()
     assert df["basel_index_pct"].between(0, 100).all()
     assert df["icp_pct"].between(0, 100).all()
+    assert df["source_url"].notna().all()
+
+    detail_period_path = PROCESSED / "risk_detail_by_period.csv"
+    assert detail_period_path.exists(), "Arquivo generalizado risk_detail_by_period.csv ausente"
+    detail_df = pd.read_csv(detail_period_path)
+    assert detail_df["period"].is_unique, "Período duplicado em risk_detail_by_period.csv"
+    assert (detail_df["moeda"] == "BRL").all(), "Métricas do Pilar 3 devem estar em BRL"
+    assert detail_df["source_url"].notna().all()
+    if (detail_df["year"] >= 2026).any():
+        assert (detail_df.loc[detail_df["year"] >= 2026, "parcial"] == "sim").all()
+
+
+def validate_source_manifest() -> None:
+    manifest_path = ROOT / "data" / "source_manifest.csv"
+    assert manifest_path.exists(), "data/source_manifest.csv ausente"
+    manifest = pd.read_csv(manifest_path)
+    assert "financial_quarterly" in set(manifest["dataset"]), "financial_quarterly deve constar no source_manifest.csv"
+    assert manifest["notes"].notna().all()
 
 
 if __name__ == "__main__":
     validate_financial_history()
+    reconciliation = validate_financial_quarterly()
     validate_vendored_sources()
     validate_regulatory_ingestion()
     validate_risk_detail()
-    print("Validação concluída: fontes locais e datasets 2021–2025 consistentes.")
+    validate_source_manifest()
+    print(
+        "Validação concluída: fontes locais e datasets 2021–2026* consistentes | "
+        f"Reconciliação 2025: Receita Δ={reconciliation['diff_revenue_2025']:.4f} bi, "
+        f"Lucro IFRS Δ={reconciliation['diff_net_income_2025']:.4f} bi (tolerância <= 0.01 bi)."
+    )
