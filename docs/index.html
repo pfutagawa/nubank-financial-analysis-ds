@@ -264,33 +264,68 @@
       <div class="shell">
         <div class="section-head">
           <div>
-            <p class="eyebrow dark">04 · Experiência do cliente</p>
-            <h2>Uma lente complementar, sem extrapolação temporal</h2>
+            <p class="eyebrow dark">04 · Experiência do cliente (Série Oficial BCB · 2024–2026*)</p>
+            <h2>Ranking de Reclamações do Banco Central</h2>
           </div>
-          <p>A amostra de reclamações é usada transversalmente para entender temas, severidade e agrupamentos. Ela não é tratada como série histórica 2021–2026*.</p>
+          <p>Comparação trimestral oficial do Índice de Reclamações Procedentes por milhão de clientes (Banco Central do Brasil) entre <strong>Nu Pagamentos (Nubank)</strong>, <strong>Itaú</strong> e <strong>Bradesco</strong>.</p>
         </div>
 
-        <div class="mini-metrics">
-          <article><span>Reclamações na amostra</span><strong id="customer-total">—</strong></article>
-          <article><span>Marcadas com perda financeira</span><strong id="customer-loss">—</strong></article>
-          <article><span>Sinais de segurança</span><strong id="customer-security">—</strong></article>
+        <div class="source-pill" id="bcb-complaints-source">Banco Central do Brasil · Ranking de Instituições por Índice de Reclamações</div>
+
+        <div class="mini-metrics" aria-label="Último trimestre publicado no Ranking BCB">
+          <article><span id="bcb-card-nu-label">Nu Pagamentos · 3T26*</span><strong id="bcb-card-nu">—</strong><small id="bcb-card-nu-note">Índice por milhão de clientes</small></article>
+          <article><span id="bcb-card-itau-label">Itaú · 3T26*</span><strong id="bcb-card-itau">—</strong><small id="bcb-card-itau-note">Índice por milhão de clientes</small></article>
+          <article><span id="bcb-card-bradesco-label">Bradesco · 3T26*</span><strong id="bcb-card-bradesco">—</strong><small id="bcb-card-bradesco-note">Índice por milhão de clientes</small></article>
         </div>
 
-        <div class="chart-grid customer-grid">
-          <article class="panel chart-panel customer-category">
-            <div class="panel-copy"><h3>Principais categorias</h3><p>Distribuição temática da amostra classificada.</p></div>
-            <div id="chart-categories" class="chart" role="img" aria-label="Gráfico das categorias de reclamações"></div>
+        <div class="chart-grid two">
+          <article class="panel chart-panel">
+            <div class="panel-copy">
+              <h3>Índice de Reclamações BCB (por milhão de clientes)</h3>
+              <p>Evolução trimestral oficial (1T24 a 3T26* parcial). Quanto menor o índice, melhor o desempenho proporcional.</p>
+            </div>
+            <div id="chart-bcb-index" class="chart" role="img" aria-label="Gráfico do Índice de Reclamações do Banco Central"></div>
           </article>
           <article class="panel chart-panel">
-            <div class="panel-copy"><h3>Severidade estimada</h3><p>Participação relativa das classes de severidade.</p></div>
-            <div id="chart-severity" class="chart" role="img" aria-label="Gráfico da severidade estimada das reclamações"></div>
+            <div class="panel-copy">
+              <h3>Reclamações reguladas procedentes vs. Base de clientes (CCS/SCR)</h3>
+              <p>Comparação no último trimestre publicado pelo BCB (3T26*).</p>
+            </div>
+            <div id="chart-bcb-latest" class="chart" role="img" aria-label="Gráfico comparativo de reclamações procedentes e clientes no último trimestre"></div>
           </article>
         </div>
 
-        <article class="panel chart-panel wide">
-          <div class="panel-copy"><h3>Clusters da amostra</h3><p>Agrupamentos produzidos no estudo acadêmico para sintetizar padrões de reclamação.</p></div>
-          <div id="chart-clusters" class="chart small" role="img" aria-label="Gráfico dos clusters de reclamações"></div>
-        </article>
+        <div class="callout warning" id="bcb-methodology-callout">
+          <strong>Nota metodológica oficial (Banco Central):</strong> a partir do <b>2º trimestre de 2024 (2T24)</b>, o Banco Central passou a adotar <b>valores extrapolados</b> (projeção estatística a partir de amostra de reclamações reguladas procedentes) para todo o universo de demandas respondidas pelas instituições no trimestre. Isso elevou o patamar numérico dos índices a partir do 2T24 sem representar, isoladamente, piora operacional automática.
+        </div>
+
+        <details class="exploratory-box" style="margin-top: 22px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 22px;">
+          <summary style="cursor: pointer; font-weight: 780; color: var(--purple-dark);">
+            ⚠️ Apêndice exploratório e não representativo: amostra antiga do Reclame Aqui (clique para expandir)
+          </summary>
+          <p class="view-footnote" id="exploratory-warning-text" style="margin-top: 10px; margin-bottom: 14px;">
+            AVISO IMPORTANTE: Esta amostra do estudo acadêmico original (Reclame Aqui) é mantida exclusivamente como <strong>exploratória e não representativa</strong>. Ela não possui série temporal confiável nem ponderação por base de clientes, não devendo ser usada para inferir tendência histórica entre 2021 e 2026*. A referência primária e oficial do projeto é o Ranking de Reclamações do Banco Central acima.
+          </p>
+          <div class="mini-metrics">
+            <article><span>Reclamações na amostra exploratória</span><strong id="customer-total">—</strong></article>
+            <article><span>Marcadas com perda financeira</span><strong id="customer-loss">—</strong></article>
+            <article><span>Sinais de segurança</span><strong id="customer-security">—</strong></article>
+          </div>
+          <div class="chart-grid customer-grid">
+            <article class="panel chart-panel customer-category">
+              <div class="panel-copy"><h3>Principais categorias (amostra exploratória)</h3><p>Distribuição temática interna da amostra não representativa.</p></div>
+              <div id="chart-categories" class="chart" role="img" aria-label="Gráfico das categorias da amostra exploratória"></div>
+            </article>
+            <article class="panel chart-panel">
+              <div class="panel-copy"><h3>Severidade estimada (amostra exploratória)</h3><p>Participação relativa das classes na amostra acadêmica.</p></div>
+              <div id="chart-severity" class="chart" role="img" aria-label="Gráfico da severidade estimada na amostra exploratória"></div>
+            </article>
+          </div>
+          <article class="panel chart-panel wide">
+            <div class="panel-copy"><h3>Clusters da amostra exploratória</h3><p>Agrupamentos do estudo acadêmico original (sem extrapolação temporal).</p></div>
+            <div id="chart-clusters" class="chart small" role="img" aria-label="Gráfico dos clusters de reclamações"></div>
+          </article>
+        </details>
       </div>
     </section>
 

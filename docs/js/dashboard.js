@@ -461,6 +461,84 @@ function renderRisk(data) {
 
 function renderCustomer(data) {
   const c = data.customer;
+  const bcb = Array.isArray(c.bcb_ranking) ? c.bcb_ranking : (data.bcb_complaints_ranking || []);
+
+  if (c.official_source_label) {
+    setNodeText('bcb-complaints-source', c.official_source_label);
+  }
+
+  if (bcb.length) {
+    const latestPeriod = c.official_latest_period || bcb[bcb.length - 1].periodo;
+    const latestRows = bcb.filter(r => r.periodo === latestPeriod);
+
+    const findInst = namePart => latestRows.find(r => String(r.instituicao).includes(namePart));
+    const nuRow = findInst('Nu');
+    const itauRow = findInst('Itaú');
+    const bradRow = findInst('Bradesco');
+
+    if (nuRow) {
+      setNodeText('bcb-card-nu-label', `Nu Pagamentos · ${latestPeriod}* (parcial)`);
+      setNodeText('bcb-card-nu', fmt2.format(nuRow.indice));
+      setNodeText('bcb-card-nu-note', `${fmt0.format(nuRow.procedentes || 0)} procedentes / ${fmt1.format((nuRow.clientes || 0) / 1e6)} mi clientes`);
+    }
+    if (itauRow) {
+      setNodeText('bcb-card-itau-label', `Itaú · ${latestPeriod}* (parcial)`);
+      setNodeText('bcb-card-itau', fmt2.format(itauRow.indice));
+      setNodeText('bcb-card-itau-note', `${fmt0.format(itauRow.procedentes || 0)} procedentes / ${fmt1.format((itauRow.clientes || 0) / 1e6)} mi clientes`);
+    }
+    if (bradRow) {
+      setNodeText('bcb-card-bradesco-label', `Bradesco · ${latestPeriod}* (parcial)`);
+      setNodeText('bcb-card-bradesco', fmt2.format(bradRow.indice));
+      setNodeText('bcb-card-bradesco-note', `${fmt0.format(bradRow.procedentes || 0)} procedentes / ${fmt1.format((bradRow.clientes || 0) / 1e6)} mi clientes`);
+    }
+
+    const instStyles = [
+      { name: 'Nu Pagamentos (Nubank)', color: PURPLE, width: 4 },
+      { name: 'Itaú', color: '#FF6B00', width: 3 },
+      { name: 'Bradesco', color: '#CC092F', width: 3 },
+    ];
+
+    const indexTraces = instStyles.map(st => {
+      const rows = bcb.filter(r => r.instituicao === st.name);
+      return {
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: st.name,
+        x: rows.map(r => (r.parcial_2026 === 'sim' ? `${r.periodo}*` : r.periodo)),
+        y: rows.map(r => r.indice),
+        line: { color: st.color, width: st.width },
+        marker: {
+          size: rows.map(r => (r.parcial_2026 === 'sim' ? 10 : 7)),
+          symbol: rows.map(r => (r.parcial_2026 === 'sim' ? 'diamond' : 'circle')),
+        },
+        hovertemplate: `<b>${st.name}</b> · %{x}<br>Índice BCB: %{y:.2f} / milhão de clientes<extra></extra>`,
+      };
+    });
+
+    safePlot('chart-bcb-index', indexTraces, layout({
+      yaxis: { title: 'Índice (reclamações / 1 mi clientes)', gridcolor: GRID },
+    }));
+
+    safePlot('chart-bcb-latest', [
+      {
+        type: 'bar',
+        name: `Reclamações procedentes (${latestPeriod}*)`,
+        x: latestRows.map(r => r.instituicao),
+        y: latestRows.map(r => r.procedentes),
+        marker: {
+          color: latestRows.map(r => (String(r.instituicao).includes('Nu') ? PURPLE : (String(r.instituicao).includes('Itaú') ? '#FF6B00' : '#CC092F'))),
+          pattern: { shape: '/' },
+        },
+        text: latestRows.map(r => (r.procedentes != null ? fmt0.format(r.procedentes) : '—')),
+        textposition: 'outside',
+        hovertemplate: '<b>%{x}</b><br>Procedentes: %{y:,.0f}<extra></extra>',
+      },
+    ], layout({
+      showlegend: false,
+      yaxis: { title: `Reclamações procedentes (${latestPeriod}*)`, gridcolor: GRID },
+    }));
+  }
+
   document.getElementById('customer-total').textContent = fmt0.format(c.total);
   document.getElementById('customer-loss').textContent = c.loss_share_pct == null ? '—' : pct(c.loss_share_pct);
   document.getElementById('customer-security').textContent = c.security_signals == null ? '—' : fmt0.format(c.security_signals);

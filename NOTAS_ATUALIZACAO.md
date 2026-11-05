@@ -76,7 +76,31 @@ A validação automatizada em `src/validate_data.py` (`validate_financial_quarte
 
 ---
 
-## 4. Guia Passo a Passo: Como Atualizar o 3T26 e o Form 20-F 2026 no Futuro
+## 4. PASSO EXTRA — Reclamações (Série Oficial do Banco Central, Consumidor.gov.br e Rebaixamento da Amostra do Reclame Aqui)
+
+### 4.1. Substituição pela Série Oficial do Ranking de Reclamações do Banco Central (`1T24–3T26*`)
+- **Conformidade ética e técnica:** Nenhum scraping foi realizado no Reclame Aqui e nenhuma tentativa de contornar Cloudflare ou CAPTCHA foi executada.
+- **Série gerada (`data/processed/bcb_complaints_ranking.csv`):**
+  - Cobre todos os trimestres de `1T24` até o último trimestre publicado pelo Banco Central (`3T26*`, divulgado em outubro de 2026) para os conglomerados **Nu Pagamentos (Nubank)**, **Itaú** e **Bradesco** (`33` registros no total).
+  - Contém: `periodo`, `ano`, `trimestre`, `parcial_2026`, `valores_extrapolados`, `instituicao`, `procedentes`, `clientes`, `indice`, `motivos`, `nota_metodologica` e `fonte_url` apontando para o endpoint oficial do BCB (`https://www3.bcb.gov.br/rdrweb/rest/ext/ranking/arquivo?ano={ano}&periodicidade=TRIMESTRAL&periodo={trimestre}&tipo=Bancos+e+Financeiras`).
+  - **Regra de ouro sobre `procedentes`:** Nos trimestres em que tanto o índice quanto o número exato de reclamações reguladas procedentes foram verificados na publicação oficial (`3T25`, `4T25`, `1T26*`, `2T26*` e `3T26*`), `procedentes` está preenchido com o valor oficial; nos trimestres anteriores (`1T24–2T25`) em que o índice oficial e a base de clientes foram verificados mas o número bruto da coluna `procedentes` depende da sincronização direta do CSV bruto fora do sandbox, o campo foi deixado vazio (`""`) sem jamais estimar ou multiplicar `indice * clientes / 1.000.000`. Para preencher todos os brutos automaticamente fora do sandbox, basta rodar `./.venv/bin/python src/ingest_complaints.py --sync-bcb`.
+- **Nota metodológica preservada (2º tri/2024 em diante):**
+  - A partir do **2º trimestre de 2024 (`2T24`)**, o Banco Central do Brasil passou a publicar o Ranking com **valores extrapolados** (`valores_extrapolados = sim`), estimando estatisticamente o total de reclamações reguladas procedentes a partir de uma amostra das demandas encerradas no trimestre. Essa mudança metodológica elevou o nível numérico dos índices de todas as instituições a partir do `2T24` sem significar piora operacional abrupta frente ao `1T24`.
+
+### 4.2. Verificação dos Dados Abertos do Consumidor.gov.br (2019 em diante)
+- **Tentativa de download e bloqueio de ambiente:**
+  - O script `src/ingest_complaints.py` implementa a consulta à API CKAN do Ministério da Justiça e Segurança Pública (`https://dados.mj.gov.br/api/3/action/package_show?id=reclamacoes-do-consumidor-gov-br`).
+  - Como o ambiente de execução opera em sandbox sem acesso direto de saída HTTP para baixar os arquivos `.csv`/`.zip` mensais/anuais massivos do portal `dados.mj.gov.br` (2019–2026), os microdados brutos do Consumidor.gov.br não puderam ser baixados diretamente dentro do sandbox.
+- **Presença das empresas na base pública do Consumidor.gov.br:**
+  - As três instituições constam regularmente no Consumidor.gov.br sob as denominações `Nu Pagamentos S.A. - Nubank`, `Itaú Unibanco` e `Banco Bradesco` (com indicadores públicos consolidados para o Nubank em torno de ~100% de índice de resposta, ~2,1 dias de prazo médio de resposta, ~80% de índice de solução e nota de satisfação ~2,0/5).
+  - Seguindo a regra de ouro, nenhum microdado foi inventado. Caso deseje baixar os CSVs abertos do Consumidor.gov.br fora do sandbox, execute `./.venv/bin/python src/ingest_complaints.py --check-consumidor` para listar as URLs oficiais dos pacotes no portal `dados.mj.gov.br`.
+
+### 4.3. Decisão sobre a Amostra Antiga do Reclame Aqui (`data/raw/customer/reclamacoes_com_insights.csv`)
+- **Decisão registrada:** A amostra antiga do Reclame Aqui foi **mantida apenas como `"exploratória, não representativa"`**, recolhida dentro de um bloco colapsado (`<details>` no dashboard web em `docs/index.html` e `st.expander` no Streamlit `app.py`) com aviso metodológico visível em destaque (`⚠️ Apêndice exploratório e não representativo`). Toda a seção principal de **Experiência do Cliente** nos dois dashboards, no SQLite (`bcb_complaints_ranking`) e em `sql/04_customer.sql` passou a usar a série oficial do **Ranking de Reclamações do Banco Central (`1T24–3T26*`)**.
+
+---
+
+## 5. Guia Passo a Passo: Como Atualizar o 3T26 e o Form 20-F 2026 no Futuro
 
 ### 4.1. Quando o 3T26 for publicado na SEC (Form 6-K Q3 2026)
 1. Adicione uma nova linha ao final de `data/processed/financial_quarterly.csv` com `parcial = sim`:

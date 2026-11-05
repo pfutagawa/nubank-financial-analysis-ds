@@ -12,5 +12,6 @@ capital_risk_history,2021-2026*,regulatory,Banco Central do Brasil / Relatório 
 risk_detail_by_period,1T24-4T25 (2026* ready),regulatory analysis,Banco Central do Brasil / Relatório de Pilar 3,"Generalized quarterly KM1, OV1 and MR1 risk breakdown by period"
 risk_2025_detail,Q1-Q4 2025,regulatory analysis,Banco Central do Brasil / Relatório de Pilar 3,"Local validated detail for 2025 risk components"
 market_history,2022-10-13 a 2026-10-08,market data,Twelve Data API / MongoDB Atlas historico_diario,"Daily historical quotes (1,000 trading days) for NU, ITUB and BBD"
-customer_complaints,academic sample,public consumer complaints,Reclame Aqui,"Complementary academic sample stored locally; not treated as a 2021-2026* time series"
+bcb_complaints_ranking,1T24-3T26* (parcial 2026),regulatory / open data,Banco Central do Brasil / Ranking de Instituições por Índice de Reclamações,"Official quarterly complaint index for Nu Pagamentos, Itaú and Bradesco (extrapolated values since 2T24) | https://dadosabertos.bcb.gov.br/dataset/ranking-de-instituicoes-por-indice-de-reclamacoes | https://www3.bcb.gov.br/rdrweb/rest/ext/ranking/arquivo"
+customer_complaints,exploratory sample,exploratory / non-representative sample,Reclame Aqui (amostra acadêmica legada),"Exploratory, non-representative academic sample stored locally; superseded by official BCB Ranking"
 selic_history,reference macro series,primary,Banco Central do Brasil / SGS 4390,"Versioned locally under data/raw/macro"

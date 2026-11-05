@@ -280,12 +280,33 @@ def load_capital_risk_history(refresh: bool = False) -> tuple[pd.DataFrame, str]
     return fallback, "Detalhe regulatório local de 2025"
 
 
+def load_bcb_complaints_ranking() -> tuple[pd.DataFrame, str]:
+    """Carrega a série oficial do Ranking de Instituições por Índice de Reclamações do Banco Central."""
+    path = PROCESSED / "bcb_complaints_ranking.csv"
+    if not path.exists():
+        return pd.DataFrame(), "Ranking oficial do Banco Central indisponível"
+    df = pd.read_csv(path)
+    df["ano"] = pd.to_numeric(df["ano"], errors="coerce").astype("Int64")
+    df["trimestre"] = pd.to_numeric(df["trimestre"], errors="coerce").astype("Int64")
+    df["procedentes"] = pd.to_numeric(df["procedentes"], errors="coerce")
+    df["clientes"] = pd.to_numeric(df["clientes"], errors="coerce")
+    df["indice"] = pd.to_numeric(df["indice"], errors="coerce")
+    df = df.sort_values(["ano", "trimestre", "indice"]).reset_index(drop=True)
+    return (
+        df,
+        "Banco Central do Brasil · Ranking de Instituições por Índice de Reclamações (1T24–3T26*)",
+    )
+
+
 def load_customer_sample() -> tuple[pd.DataFrame, str]:
-    """Load the locally versioned academic complaint sample."""
+    """Load the locally versioned academic complaint sample (mantida apenas como exploratória e não representativa)."""
     path = RAW_CUSTOMER / "reclamacoes_com_insights.csv"
     if not path.exists():
-        return pd.DataFrame(), "Amostra de reclamações indisponível"
-    return pd.read_csv(path), "Amostra acadêmica de reclamações públicas"
+        return pd.DataFrame(), "Amostra exploratória indisponível"
+    return (
+        pd.read_csv(path),
+        "Amostra exploratória e não representativa (Reclame Aqui — estudo acadêmico complementar)",
+    )
 
 
 def customer_summary(df: pd.DataFrame) -> dict[str, pd.DataFrame]:

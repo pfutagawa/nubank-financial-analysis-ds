@@ -1,4 +1,20 @@
--- Perfil da amostra acadêmica de reclamações
+-- 1) Série oficial primária: Ranking de Instituições por Índice de Reclamações do Banco Central (Nu Pagamentos, Itaú e Bradesco)
+SELECT
+    periodo,
+    ano,
+    trimestre,
+    parcial_2026,
+    valores_extrapolados,
+    instituicao,
+    procedentes,
+    clientes,
+    indice,
+    motivos,
+    fonte_url
+FROM bcb_complaints_ranking
+ORDER BY ano, trimestre, indice ASC;
+
+-- 2) Amostra antiga do Reclame Aqui (mantida apenas como exploratória e não representativa)
 SELECT
     Categoria_Primaria AS categoria,
     COUNT(*) AS reclamacoes,

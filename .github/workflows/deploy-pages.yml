@@ -38,6 +38,9 @@ jobs:
       - name: Ingest Pillar 3 regulatory history
         run: python src/ingest_pillar3.py
 
+      - name: Ingest BCB official complaints ranking
+        run: python src/ingest_complaints.py
+
       - name: Validate project datasets (2021-2026*)
         run: python src/validate_data.py
 
@@ -69,7 +72,8 @@ jobs:
           assert "views" in data and {"closed_years", "ltm", "ytd_comparison"}.issubset(set(data["views"].keys()))
           assert "market" in data, "Chave market ausente no payload web"
           assert data["risk"], "A camada regulatória não pode estar vazia"
-          assert data["customer"]["total"] > 0, "A amostra de reclamações não pode estar vazia"
+          assert "bcb_complaints_ranking" in data and len(data["bcb_complaints_ranking"]) >= 30, "Série oficial BCB ausente no payload web"
+          assert data["customer"]["total"] > 0 and "exploratória" in data["customer"].get("source_label", "").lower(), "A amostra de reclamações deve estar marcada como exploratória"
           assert Path("docs/index.html").exists()
           assert Path("docs/css/style.css").exists()
           assert Path("docs/js/dashboard.js").exists()

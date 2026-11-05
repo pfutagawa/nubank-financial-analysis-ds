@@ -182,11 +182,76 @@ def validate_risk_detail() -> None:
         assert (detail_df.loc[detail_df["year"] >= 2026, "parcial"] == "sim").all()
 
 
+def validate_bcb_complaints_ranking() -> None:
+    """Valida a série oficial do Ranking de Reclamações do Banco Central (Nu Pagamentos, Itaú e Bradesco)."""
+    bcb_path = PROCESSED / "bcb_complaints_ranking.csv"
+    assert bcb_path.exists(), f"Série oficial do Ranking BCB ausente: {bcb_path}"
+    df = pd.read_csv(bcb_path)
+
+    required_cols = {
+        "periodo",
+        "ano",
+        "trimestre",
+        "parcial_2026",
+        "valores_extrapolados",
+        "instituicao",
+        "procedentes",
+        "clientes",
+        "indice",
+        "motivos",
+        "nota_metodologica",
+        "fonte_url",
+    }
+    missing = required_cols - set(df.columns)
+    assert not missing, f"Colunas ausentes em bcb_complaints_ranking.csv: {sorted(missing)}"
+
+    expected_insts = {"Nu Pagamentos (Nubank)", "Itaú", "Bradesco"}
+    assert set(df["instituicao"].unique()) == expected_insts, (
+        f"Instituições esperadas {expected_insts}, encontradas {set(df['instituicao'].unique())}"
+    )
+
+    # Sem duplicidade de (periodo, instituicao)
+    assert not df.duplicated(subset=["periodo", "instituicao"]).any(), (
+        "Existem pares (periodo, instituicao) duplicados em bcb_complaints_ranking.csv"
+    )
+
+    # Regra 2026 parcial
+    assert (df.loc[df["ano"] == 2026, "parcial_2026"] == "sim").all(), "Períodos de 2026 devem ter parcial_2026 = sim"
+    assert (df.loc[df["ano"] <= 2025, "parcial_2026"] == "não").all(), "Períodos <= 2025 devem ter parcial_2026 = não"
+
+    # Preservação da nota metodológica (valores extrapolados desde o 2º tri/2024)
+    assert (df.loc[df["periodo"] == "1T24", "valores_extrapolados"] == "não").all(), (
+        "O 1T24 deve ter valores_extrapolados = não"
+    )
+    assert (df.loc[df["periodo"] != "1T24", "valores_extrapolados"] == "sim").all(), (
+        "Todos os períodos a partir do 2T24 devem ter valores_extrapolados = sim"
+    )
+    assert df.loc[df["periodo"] != "1T24", "nota_metodologica"].astype(str).str.contains("extrapolados", case=False, na=False).all(), (
+        "Todas as linhas a partir do 2T24 devem preservar a nota metodológica sobre valores extrapolados"
+    )
+    assert df["nota_metodologica"].notna().all(), "Coluna nota_metodologica não pode ser nula"
+
+    # Índices, clientes e motivos preenchidos + fonte_url oficial do BCB em todas as linhas
+    assert (df["indice"] > 0).all(), "Todo registro deve ter índice BCB positivo"
+    assert (df["clientes"] > 0).all(), "Todo registro deve ter quantidade de clientes positiva"
+    assert df["motivos"].notna().all() and (df["motivos"].astype(str).str.strip() != "").all(), (
+        "Todo registro deve informar os principais motivos de reclamação"
+    )
+    assert df["fonte_url"].notna().all() and (df["fonte_url"].astype(str).str.strip() != "").all(), (
+        "Nenhum número pode ficar sem fonte_url em bcb_complaints_ranking.csv"
+    )
+    assert df["fonte_url"].astype(str).str.startswith("https://www3.bcb.gov.br/").all(), (
+        "Toda fonte_url em bcb_complaints_ranking.csv deve apontar para o endpoint oficial do Banco Central"
+    )
+
+
 def validate_source_manifest() -> None:
     manifest_path = ROOT / "data" / "source_manifest.csv"
     assert manifest_path.exists(), "data/source_manifest.csv ausente"
     manifest = pd.read_csv(manifest_path)
-    assert "financial_quarterly" in set(manifest["dataset"]), "financial_quarterly deve constar no source_manifest.csv"
+    datasets = set(manifest["dataset"])
+    assert "financial_quarterly" in datasets, "financial_quarterly deve constar no source_manifest.csv"
+    assert "bcb_complaints_ranking" in datasets, "bcb_complaints_ranking deve constar no source_manifest.csv"
     assert manifest["notes"].notna().all()
 
 
@@ -196,9 +261,11 @@ if __name__ == "__main__":
     validate_vendored_sources()
     validate_regulatory_ingestion()
     validate_risk_detail()
+    validate_bcb_complaints_ranking()
     validate_source_manifest()
     print(
         "Validação concluída: fontes locais e datasets 2021–2026* consistentes | "
         f"Reconciliação 2025: Receita Δ={reconciliation['diff_revenue_2025']:.4f} bi, "
-        f"Lucro IFRS Δ={reconciliation['diff_net_income_2025']:.4f} bi (tolerância <= 0.01 bi)."
+        f"Lucro IFRS Δ={reconciliation['diff_net_income_2025']:.4f} bi (tolerância <= 0.01 bi) | "
+        "Ranking BCB 1T24–3T26* validado."
     )

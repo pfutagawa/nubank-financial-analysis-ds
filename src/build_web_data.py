@@ -13,6 +13,7 @@ from pymongo.errors import PyMongoError
 from src.data_pipeline import (
     compute_metrics_2026,
     customer_summary,
+    load_bcb_complaints_ranking,
     load_capital_risk_history,
     load_customer_sample,
     load_financial_history,
@@ -209,6 +210,7 @@ def build_payload() -> dict[str, Any]:
     financial_quarterly = load_financial_quarterly()
     risk, risk_source = load_capital_risk_history()
     risk_detail_all = load_risk_detail_by_period()
+    bcb_complaints, bcb_complaints_source = load_bcb_complaints_ranking()
     complaints, complaints_source = load_customer_sample()
     risk_detail_2025 = pd.read_csv(ROOT / "data" / "processed" / "risk_2025_detail.csv")
     manifest = pd.read_csv(ROOT / "data" / "source_manifest.csv")
@@ -219,7 +221,27 @@ def build_payload() -> dict[str, Any]:
     latest = financial.iloc[-1]
     first = financial.iloc[0]
 
+    latest_bcb_period = str(bcb_complaints["periodo"].iloc[-1]) if not bcb_complaints.empty else "3T26"
+    latest_bcb_rows = (
+        bcb_complaints[bcb_complaints["periodo"] == latest_bcb_period]
+        if not bcb_complaints.empty
+        else pd.DataFrame()
+    )
+
     customer = {
+        "official_source_label": bcb_complaints_source,
+        "official_latest_period": latest_bcb_period,
+        "official_methodology_note": (
+            str(bcb_complaints["nota_metodologica"].iloc[-1])
+            if not bcb_complaints.empty
+            else "Valores extrapolados desde o 2º tri/2024."
+        ),
+        "bcb_ranking": records(bcb_complaints),
+        "bcb_latest": records(latest_bcb_rows),
+        "exploratory_warning": (
+            "AVISO: A amostra abaixo (Reclame Aqui) é mantida exclusivamente como exploratória e não representativa. "
+            "A referência oficial de reclamações do projeto é o Ranking de Instituições por Índice de Reclamações do Banco Central."
+        ),
         "total": int(len(complaints)),
         "loss_share_pct": None,
         "security_signals": None,
@@ -283,6 +305,7 @@ def build_payload() -> dict[str, Any]:
         "risk": records(risk),
         "risk_2025": records(risk_detail_2025),
         "risk_detail_by_period": records(risk_detail_all),
+        "bcb_complaints_ranking": records(bcb_complaints),
         "customer": customer,
         "sources": records(manifest),
     }

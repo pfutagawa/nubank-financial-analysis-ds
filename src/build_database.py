@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.data_pipeline import (
+    load_bcb_complaints_ranking,
     load_capital_risk_history,
     load_customer_sample,
     load_financial_history,
@@ -142,6 +143,7 @@ def build_database() -> Path:
     financial_quarterly = load_financial_quarterly()
     risk, _ = load_capital_risk_history()
     risk_detail = load_risk_detail_by_period()
+    bcb_complaints, _ = load_bcb_complaints_ranking()
     complaints, _ = load_customer_sample()
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -156,6 +158,8 @@ def build_database() -> Path:
         financial_quarterly.to_sql("financial_quarterly", conn, if_exists="replace", index=False)
         risk.to_sql("capital_risk_history", conn, if_exists="replace", index=False)
         risk_detail.to_sql("risk_detail_by_period", conn, if_exists="replace", index=False)
+        if not bcb_complaints.empty:
+            bcb_complaints.to_sql("bcb_complaints_ranking", conn, if_exists="replace", index=False)
         if not complaints.empty:
             complaints.to_sql("customer_complaints", conn, if_exists="replace", index=False)
 

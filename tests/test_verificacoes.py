@@ -269,6 +269,31 @@ class TestAtualizacao2026ReconciliacaoEMetricas(unittest.TestCase):
         self.assertAlmostEqual(metrics["stocks_latest"]["depositos_usd_b"], 45.3, places=1)
         self.assertAlmostEqual(metrics["stocks_latest"]["carteira_credito_usd_b"], 39.4, places=1)
 
+    def test_bcb_complaints_ranking_oficial_e_aviso_exploratorio(self):
+        from src.data_pipeline import load_bcb_complaints_ranking, load_customer_sample
+        from src.validate_data import validate_bcb_complaints_ranking
+
+        validate_bcb_complaints_ranking()
+        bcb_df, bcb_source = load_bcb_complaints_ranking()
+        self.assertFalse(bcb_df.empty)
+        self.assertIn("Banco Central", bcb_source)
+        self.assertEqual(set(bcb_df["instituicao"].unique()), {"Nu Pagamentos (Nubank)", "Itaú", "Bradesco"})
+        self.assertTrue((bcb_df.loc[bcb_df["ano"] == 2026, "parcial_2026"] == "sim").all())
+        self.assertTrue((bcb_df.loc[bcb_df["periodo"] == "1T24", "valores_extrapolados"] == "não").all())
+        self.assertTrue((bcb_df.loc[bcb_df["periodo"] != "1T24", "valores_extrapolados"] == "sim").all())
+        self.assertTrue(bcb_df["fonte_url"].str.startswith("https://www3.bcb.gov.br/").all())
+
+        # Último trimestre publicado no Ranking BCB (3T26*): Nu (10.68) < Itaú (43.20) < Bradesco (57.23)
+        q3_26 = bcb_df[bcb_df["periodo"] == "3T26"].set_index("instituicao")
+        self.assertAlmostEqual(float(q3_26.loc["Nu Pagamentos (Nubank)", "indice"]), 10.68, places=2)
+        self.assertAlmostEqual(float(q3_26.loc["Itaú", "indice"]), 43.20, places=2)
+        self.assertAlmostEqual(float(q3_26.loc["Bradesco", "indice"]), 57.23, places=2)
+
+        # Amostra antiga do Reclame Aqui mantida apenas como exploratória e não representativa
+        _, sample_label = load_customer_sample()
+        self.assertIn("exploratória", sample_label.lower())
+        self.assertIn("não representativa", sample_label.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ import streamlit as st
 from src.data_pipeline import (
     compute_metrics_2026,
     customer_summary,
+    load_bcb_complaints_ranking,
     load_capital_risk_history,
     load_customer_sample,
     load_financial_history,
@@ -181,12 +182,35 @@ def get_data():
     quarterly = load_financial_quarterly()
     risk, risk_source = load_capital_risk_history()
     risk_detail = load_risk_detail_by_period()
+    bcb_complaints, bcb_source = load_bcb_complaints_ranking()
     complaints, complaints_source = load_customer_sample()
     metrics_2026 = compute_metrics_2026(financial, quarterly, risk)
-    return financial, quarterly, risk, risk_source, risk_detail, complaints, complaints_source, metrics_2026
+    return (
+        financial,
+        quarterly,
+        risk,
+        risk_source,
+        risk_detail,
+        bcb_complaints,
+        bcb_source,
+        complaints,
+        complaints_source,
+        metrics_2026,
+    )
 
 
-financial, quarterly, risk, risk_source, risk_detail, complaints, complaints_source, metrics_2026 = get_data()
+(
+    financial,
+    quarterly,
+    risk,
+    risk_source,
+    risk_detail,
+    bcb_complaints,
+    bcb_source,
+    complaints,
+    complaints_source,
+    metrics_2026,
+) = get_data()
 market_df, market_error = load_historico_diario()
 
 VIEW_OPTIONS = {
@@ -906,77 +930,203 @@ with tab_risk:
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_customer:
-    st.markdown("## Sinais da experiência do cliente")
+    st.markdown("## Experiência do cliente · Ranking Oficial de Reclamações do Banco Central (1T24–3T26*)")
+    st.markdown(f"<span class='source-chip'>{bcb_source}</span>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='section-note'><b>Importante:</b> esta camada usa uma amostra acadêmica de reclamações públicas. Como a base disponível não contém uma dimensão temporal confiável e comparável, ela não é usada para afirmar evolução entre 2021 e 2026*.</div>",
+        """
+        <div class="partial-banner" style="margin-top:0.65rem;">
+          <b>Nota metodológica (Banco Central do Brasil):</b> A partir do <b>2º trimestre de 2024 (2T24)</b>, o Banco Central passou a publicar o Ranking com <b>valores extrapolados</b> — estimando estatisticamente o total de reclamações reguladas procedentes a partir de amostra das demandas encerradas no trimestre. Essa mudança metodológica elevou o patamar numérico dos índices em todo o Sistema Financeiro Nacional a partir do 2T24, sem significar deterioração operacional abrupta em relação ao 1T24. Períodos de 2026 (<code>1T26*</code> a <code>3T26*</code>) compõem o ano parcial <code>2026*</code>.
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    if complaints.empty:
-        st.warning("A amostra local de reclamações não está disponível nesta execução. As demais análises permanecem disponíveis.")
+    if bcb_complaints.empty:
+        st.warning("A série oficial do Ranking de Reclamações do Banco Central não está disponível.")
     else:
-        summaries = customer_summary(complaints)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Reclamações na amostra", f"{len(complaints):,}".replace(",", "."))
-        if "Perda_Financeira" in complaints:
-            share = pd.to_numeric(complaints["Perda_Financeira"], errors="coerce").fillna(0).mean() * 100
-            c2.metric("Marcadas com perda financeira", f"{share:.1f}%")
-        if "Problema_Seguranca" in complaints:
-            security = pd.to_numeric(complaints["Problema_Seguranca"], errors="coerce").fillna(0).sum()
-            c3.metric("Sinais de segurança", f"{int(security)}")
+        latest_bcb_period = bcb_complaints["periodo"].iloc[-1]
+        latest_bcb = bcb_complaints[bcb_complaints["periodo"] == latest_bcb_period].copy()
+        latest_bcb_label = f"{latest_bcb_period}*" if (latest_bcb["parcial_2026"] == "sim").any() else str(latest_bcb_period)
 
-        left, right = st.columns([1.15, 0.85])
-        with left:
-            categories = summaries["categories"].sort_values("reclamacoes", ascending=True)
-            if not categories.empty:
-                fig = px.bar(
-                    categories,
-                    x="reclamacoes",
-                    y="categoria",
-                    orientation="h",
-                    text="reclamacoes",
-                    title="Principais categorias da amostra",
-                    labels={"reclamacoes": "Reclamações", "categoria": ""},
-                    color_discrete_sequence=[NU_PURPLE],
+        b_cols = st.columns(3)
+        inst_order = ["Nu Pagamentos (Nubank)", "Itaú", "Bradesco"]
+        for col, inst_name in zip(b_cols, inst_order):
+            row_inst = latest_bcb[latest_bcb["instituicao"] == inst_name]
+            if not row_inst.empty:
+                r = row_inst.iloc[0]
+                proc_str = f"{int(r['procedentes']):,}".replace(",", ".") if pd.notna(r["procedentes"]) else "n/d"
+                cli_mi = float(r["clientes"]) / 1_000_000.0
+                col.markdown(
+                    metric_card(
+                        f"Índice BCB · {inst_name} ({latest_bcb_label})",
+                        f"{float(r['indice']):.2f}".replace(".", ","),
+                        f"{proc_str} procedentes · {cli_mi:.1f} mi clientes (valores extrapolados)",
+                    ),
+                    unsafe_allow_html=True,
                 )
-                fig.update_traces(textposition="outside")
-                fig.update_layout(template="plotly_white", height=440, margin=dict(l=20, r=40, t=60, b=20))
-                fig.update_xaxes(gridcolor=GRID)
-                st.plotly_chart(fig, use_container_width=True)
-        with right:
-            severity = summaries["severity"]
-            if not severity.empty:
-                fig = px.pie(
-                    severity,
-                    values="reclamacoes",
-                    names="severidade",
-                    hole=0.58,
-                    title="Severidade estimada",
-                    color_discrete_sequence=[NU_DARK, NU_PURPLE, "#C89BE5", "#E9D9F1"],
-                )
-                fig.update_layout(
-                    template="plotly_white",
-                    height=440,
-                    margin=dict(l=20, r=20, t=60, b=20),
-                    legend=dict(orientation="h", y=-0.08),
-                )
-                st.plotly_chart(fig, use_container_width=True)
 
-        clusters = summaries["clusters"]
-        if not clusters.empty:
-            fig = px.bar(
-                clusters,
-                x="cluster",
-                y="reclamacoes",
-                text="reclamacoes",
-                title="Distribuição dos clusters do estudo acadêmico",
-                labels={"cluster": "Cluster", "reclamacoes": "Reclamações"},
-                color_discrete_sequence=[NU_MID],
+        BCB_COLORS = {
+            "Nu Pagamentos (Nubank)": NU_PURPLE,
+            "Itaú": "#FF6B00",
+            "Bradesco": "#CC092F",
+        }
+        bcb_plot = bcb_complaints.copy()
+        bcb_plot["periodo_label"] = bcb_plot.apply(
+            lambda r: f"{r['periodo']}*" if r["parcial_2026"] == "sim" else str(r["periodo"]),
+            axis=1,
+        )
+
+        left_b, right_b = st.columns([1.2, 0.8])
+        with left_b:
+            fig_bcb_idx = px.line(
+                bcb_plot,
+                x="periodo_label",
+                y="indice",
+                color="instituicao",
+                markers=True,
+                color_discrete_map=BCB_COLORS,
+                title="Evolução trimestral do Índice de Reclamações BCB (1T24–3T26*)",
+                labels={
+                    "periodo_label": "Trimestre (2T24+ com valores extrapolados)",
+                    "indice": "Índice BCB (procedentes / milhão de clientes)",
+                    "instituicao": "Conglomerado",
+                },
             )
-            fig.update_layout(template="plotly_white", height=330, margin=dict(l=20, r=20, t=60, b=20))
-            fig.update_xaxes(dtick=1)
-            fig.update_yaxes(gridcolor=GRID)
-            st.plotly_chart(fig, use_container_width=True)
+            fig_bcb_idx.update_traces(line=dict(width=3), marker=dict(size=8))
+            fig_bcb_idx.update_layout(
+                template="plotly_white",
+                height=420,
+                legend=dict(orientation="h", y=1.1, x=0),
+                margin=dict(l=20, r=20, t=75, b=20),
+            )
+            fig_bcb_idx.update_xaxes(gridcolor=GRID)
+            fig_bcb_idx.update_yaxes(gridcolor=GRID)
+            st.plotly_chart(fig_bcb_idx, use_container_width=True)
+
+        with right_b:
+            latest_bar = latest_bcb.dropna(subset=["procedentes"]).sort_values("indice", ascending=True)
+            fig_bcb_proc = px.bar(
+                latest_bar,
+                x="procedentes",
+                y="instituicao",
+                orientation="h",
+                color="instituicao",
+                text="procedentes",
+                color_discrete_map=BCB_COLORS,
+                title=f"Reclamações reguladas procedentes ({latest_bcb_label})",
+                labels={
+                    "procedentes": "Reclamações procedentes (extrapoladas)",
+                    "instituicao": "",
+                },
+            )
+            fig_bcb_proc.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+            fig_bcb_proc.update_layout(
+                template="plotly_white",
+                height=420,
+                showlegend=False,
+                margin=dict(l=20, r=45, t=75, b=20),
+            )
+            fig_bcb_proc.update_xaxes(gridcolor=GRID)
+            st.plotly_chart(fig_bcb_proc, use_container_width=True)
+
+        st.markdown(
+            f"<div class='insight'><b>Posição relativa no {latest_bcb_label}:</b> Com base de <b>119,6 milhões de clientes</b> no SFN, o conglomerado <b>Nu Pagamentos (Nubank)</b> registrou índice de <b>10,68</b> (1.278 reclamações reguladas procedentes extrapoladas, 13ª posição no Top 15), permanecendo estruturalmente abaixo de <b>Itaú (43,20)</b> e <b>Bradesco (57,23)</b> em toda a janela <code>1T24–3T26*</code>.</div>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("### Tabela auditável · Ranking de Reclamações do Banco Central (com `fonte_url`)")
+        st.dataframe(
+            bcb_complaints[
+                [
+                    "periodo",
+                    "instituicao",
+                    "indice",
+                    "procedentes",
+                    "clientes",
+                    "valores_extrapolados",
+                    "parcial_2026",
+                    "motivos",
+                    "fonte_url",
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.markdown("---")
+    with st.expander("⚠️ Apêndice exploratório e não representativo: amostra antiga do Reclame Aqui (clique para expandir)"):
+        st.warning(
+            "**AVISO METODOLÓGICO — AMOSTRA EXPLORATÓRIA, NÃO REPRESENTATIVA:** "
+            "Os gráficos abaixo utilizam a amostra estática antiga do Reclame Aqui (`data/raw/customer/reclamacoes_com_insights.csv`), "
+            "mantida no repositório apenas como apêndice exploratório de estudo acadêmico de NLP/clusterização. "
+            "Ela **não possui cobertura temporal auditável 2021–2026*** e **foi substituída pela série oficial do Banco Central acima** "
+            "como referência analítica de experiência do cliente."
+        )
+        if complaints.empty:
+            st.info("A amostra local exploratória de reclamações não está disponível nesta execução.")
+        else:
+            summaries = customer_summary(complaints)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Reclamações na amostra exploratória", f"{len(complaints):,}".replace(",", "."))
+            if "Perda_Financeira" in complaints:
+                share = pd.to_numeric(complaints["Perda_Financeira"], errors="coerce").fillna(0).mean() * 100
+                c2.metric("Marcadas com perda financeira", f"{share:.1f}%")
+            if "Problema_Seguranca" in complaints:
+                security = pd.to_numeric(complaints["Problema_Seguranca"], errors="coerce").fillna(0).sum()
+                c3.metric("Sinais de segurança", f"{int(security)}")
+
+            left, right = st.columns([1.15, 0.85])
+            with left:
+                categories = summaries["categories"].sort_values("reclamacoes", ascending=True)
+                if not categories.empty:
+                    fig = px.bar(
+                        categories,
+                        x="reclamacoes",
+                        y="categoria",
+                        orientation="h",
+                        text="reclamacoes",
+                        title="Principais categorias da amostra exploratória (não representativa)",
+                        labels={"reclamacoes": "Reclamações", "categoria": ""},
+                        color_discrete_sequence=[NU_PURPLE],
+                    )
+                    fig.update_traces(textposition="outside")
+                    fig.update_layout(template="plotly_white", height=420, margin=dict(l=20, r=40, t=60, b=20))
+                    fig.update_xaxes(gridcolor=GRID)
+                    st.plotly_chart(fig, use_container_width=True)
+            with right:
+                severity = summaries["severity"]
+                if not severity.empty:
+                    fig = px.pie(
+                        severity,
+                        values="reclamacoes",
+                        names="severidade",
+                        hole=0.58,
+                        title="Severidade estimada (amostra exploratória)",
+                        color_discrete_sequence=[NU_DARK, NU_PURPLE, "#C89BE5", "#E9D9F1"],
+                    )
+                    fig.update_layout(
+                        template="plotly_white",
+                        height=420,
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        legend=dict(orientation="h", y=-0.08),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+            clusters = summaries["clusters"]
+            if not clusters.empty:
+                fig = px.bar(
+                    clusters,
+                    x="cluster",
+                    y="reclamacoes",
+                    text="reclamacoes",
+                    title="Distribuição dos clusters do estudo acadêmico (exploratório)",
+                    labels={"cluster": "Cluster", "reclamacoes": "Reclamações"},
+                    color_discrete_sequence=[NU_MID],
+                )
+                fig.update_layout(template="plotly_white", height=320, margin=dict(l=20, r=20, t=60, b=20))
+                fig.update_xaxes(dtick=1)
+                fig.update_yaxes(gridcolor=GRID)
+                st.plotly_chart(fig, use_container_width=True)
 
 with tab_method:
     st.markdown("## Como o projeto foi construído (2021–2026*)")
@@ -997,19 +1147,21 @@ with tab_method:
     st.code(
         """data/
 ├── raw/pillar3/                      # arquivos regulatórios 2021-2025 + pasta 2026 pronta
-├── raw/customer/                     # amostra de reclamações versionada localmente
+├── raw/customer/                     # amostra exploratória (não representativa) do Reclame Aqui
 ├── processed/
 │   ├── financial_history.csv         # série anual fechada 2021-2025 (intacta)
 │   ├── financial_quarterly.csv       # série trimestral 1T25-2T26* (com flag parcial)
+│   ├── bcb_complaints_ranking.csv    # série oficial BCB de reclamações (1T24-3T26*)
 │   ├── capital_risk_history_long.csv
 │   ├── risk_detail_by_period.csv     # detalhamento prudencial generalizado por período
 │   ├── risk_2025_detail.csv
 │   └── market_history.csv
 ├── source_manifest.csv
 src/
-├── data_pipeline.py                  # carga local, LTM, YTD e estoques 2026*
+├── data_pipeline.py                  # carga local, LTM, YTD, estoques 2026* e BCB Ranking
 ├── ingest_sec_quarterly.py           # verificação de relatórios SEC 6-K/20-F
 ├── ingest_pillar3.py                 # reconstrução a partir dos XLSX brutos (2021-2026*)
+├── ingest_complaints.py              # ingestão do Ranking BCB e verificação Consumidor.gov.br
 ├── build_database.py                 # gera SQLite analítico e views LTM/YTD
 ├── build_web_data.py                 # gera payload JSON para GitHub Pages (docs/)
 └── validate_data.py                  # reconciliação 2025 e validações de integridade
@@ -1027,7 +1179,7 @@ NOTAS_ATUALIZACAO.md                  # registro de decisões, reconciliação e
 - Métricas financeiras são reportadas em **US$** e preservam a unidade utilizada nas divulgações da companhia na SEC.
 - Capital regulatório e RWA são apresentados em **R$**, seguindo os arquivos regulatórios Pilar 3 versionados localmente.
 - Medidas ajustadas são identificadas como **não IFRS** e não substituem o lucro líquido IFRS.
-- A base de reclamações é analisada apenas como **amostra transversal complementar**, sem extrapolação temporal.
+- **Experiência do cliente (Série Oficial BCB):** Utiliza o **Ranking de Instituições por Índice de Reclamações do Banco Central (`1T24–3T26*`)** para Nu Pagamentos, Itaú e Bradesco, preservando a nota metodológica de **valores extrapolados desde o 2º tri/2024 (`2T24`)**. A amostra antiga do Reclame Aqui foi rebaixada para apêndice exploratório e não representativo.
         """
     )
 
