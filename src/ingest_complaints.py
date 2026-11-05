@@ -195,3 +195,4 @@ if __name__ == "__main__":
         f"Série oficial do Ranking de Reclamações BCB pronta: {len(df)} registros "
         f"({df['periodo'].iloc[0]} a {df['periodo'].iloc[-1]}) em {BCB_RANKING_OUTPUT}"
     )
+
