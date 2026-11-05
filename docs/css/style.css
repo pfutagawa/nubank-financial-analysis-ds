@@ -80,6 +80,68 @@ nav a:hover, nav a:focus-visible { color: var(--purple); }
 .hero-question p { margin: 8px 0 0; font-size: 1.06rem; color: rgba(255,255,255,.9); }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 14px; }
+.view-selector-bar {
+  margin-top: 18px;
+  padding: 18px 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--purple);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 26px rgba(31, 12, 39, .035);
+}
+.view-selector-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.partial-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #8a4b00;
+  border: 1px solid #f5d4a3;
+  font-size: .74rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.view-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.view-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--tint);
+  color: var(--muted);
+  padding: 9px 15px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: .83rem;
+  font-weight: 740;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.view-btn:hover, .view-btn:focus-visible {
+  border-color: var(--purple);
+  color: var(--purple-dark);
+}
+.view-btn.active {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+.view-footnote {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.5;
+}
 .metric-card {
   padding: 21px; min-height: 142px; display: flex; flex-direction: column;
   border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff;
