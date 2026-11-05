@@ -1,0 +1,7 @@
+periodo_fim,ano,trimestre,parcial,receita,lucro_liquido_ifrs,clientes,depositos,carteira_credito,carteira_credito_juros,arpac_mensal,custo_servir_mensal,moeda,unidade,fonte_url
+2025-03-31,2025,1T25,não,3.2477,0.5572,118.6,31.6,24.1,13.8,11.2,0.7,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281425002061/nufs1q25_6k.htm
+2025-06-30,2025,2T25,não,3.6685,0.6370,122.7,36.6,27.3,15.7,12.2,0.8,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281425002998/nufs2q25_6k.htm
+2025-09-30,2025,3T25,não,4.1727,0.7834,127.0,38.8,30.4,17.7,13.4,0.9,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281425003943/nufs3q25_6k.htm
+2025-12-31,2025,4T25,não,4.6859,0.8948,131.0,41.9,32.7,18.5,15.0,0.8,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426002166/nuform20f_2025.htm
+2026-03-31,2026,1T26,sim,4.9680,0.8714,135.2,42.4,37.2,,15.9,1.0,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426003053/nufs1q26_6k.htm
+2026-06-30,2026,2T26,sim,5.5132,1.0611,139.0,45.3,39.4,,17.1,1.0,USD,"fluxos_estoques=USD_bi;clientes=mi;arpac_custo=USD_mensal",https://www.sec.gov/Archives/edgar/data/1691493/000129281426004222/nufs2q26_6k.htm
