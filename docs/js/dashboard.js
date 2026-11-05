@@ -2,10 +2,14 @@ const PURPLE = '#820AD1';
 const PURPLE_DARK = '#2F0549';
 const PURPLE_MID = '#6B16A8';
 const PURPLE_SOFT = '#C89BE5';
+const PARTIAL_AMBER = '#C17200';
 const MUTED = '#6F6673';
 const GRID = '#ECE7EF';
 const POSITIVE = '#157A54';
 const NEGATIVE = '#B42318';
+
+let currentView = 'ltm';
+let dashboardPayload = null;
 
 const plotConfig = {
   responsive: true,
@@ -54,52 +58,207 @@ function values(rows, key) {
   return rows.map(row => row[key]);
 }
 
-function years(rows) {
-  return rows.map(row => String(row.year));
-}
-
 function safePlot(id, traces, chartLayout) {
   const node = document.getElementById(id);
   if (!node || typeof Plotly === 'undefined') return;
   Plotly.newPlot(node, traces, chartLayout, plotConfig);
 }
 
-function renderHeadline(data) {
-  const h = data.headline;
-  document.getElementById('metric-customers').textContent = `${fmt1.format(h.customers_m)} mi`;
-  document.getElementById('metric-customers-note').textContent = `+${fmt0.format(h.customer_growth_pct)}% desde 2021`;
-  document.getElementById('metric-revenue').textContent = usdB(h.revenue_usd_b);
-  document.getElementById('metric-revenue-note').textContent = `${fmt1.format(h.revenue_multiple)}× o nível de 2021`;
-  document.getElementById('metric-income').textContent = usdB(h.net_income_usd_b);
-  document.getElementById('metric-deposits').textContent = usdB(h.deposits_usd_b, 1);
-  document.getElementById('metric-deposits-note').textContent = `${fmt1.format(h.deposit_multiple)}× o nível de 2021`;
+function setNodeText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
-function renderGrowth(data) {
-  const f = data.financial;
-  const x = years(f);
+function getActiveFinancialSeries(data, viewMode) {
+  const views = data.views || {};
+  if (viewMode === 'closed_years') {
+    return (views.closed_years || data.financial).map(r => ({
+      ...r,
+      xLabel: String(r.year),
+      isPartial: false,
+    }));
+  }
+  if (viewMode === 'ytd_comparison') {
+    return (views.ytd_comparison || []).map(r => ({
+      ...r,
+      xLabel: r.is_partial ? `2026* (parcial até ${data.meta.partial_reference || '2T26'})` : `2025 (${data.metrics_2026.ytd_comparison.label_2025})`,
+      isPartial: Boolean(r.is_partial),
+    }));
+  }
+  if (viewMode === 'quarterly') {
+    return (data.financial_quarterly || []).map(q => ({
+      year: q.ano,
+      xLabel: q.parcial === 'sim' ? `${q.trimestre}* (parcial)` : q.trimestre,
+      isPartial: q.parcial === 'sim',
+      customers_m: q.clientes,
+      arpac_usd: q.arpac_mensal,
+      cost_to_serve_usd: q.custo_servir_mensal,
+      revenue_usd_b: q.receita,
+      gross_profit_usd_b: null,
+      net_income_usd_b: q.lucro_liquido_ifrs,
+      deposits_usd_b: q.depositos,
+      credit_portfolio_usd_b: q.carteira_credito,
+      interest_earning_portfolio_usd_b: q.carteira_credito_juros,
+      source_url: q.fonte_url,
+    }));
+  }
+  // Padrão: LTM (2021-2025 fechados + 2026* LTM)
+  return (views.ltm || data.financial).map(r => ({
+    ...r,
+    xLabel: r.is_partial ? `2026* (parcial até ${data.meta.partial_reference || '2T26'})` : String(r.year),
+    isPartial: Boolean(r.is_partial),
+  }));
+}
+
+function renderHeadline(data, viewMode = currentView) {
+  const h = data.headline;
+  const m26 = data.metrics_2026;
+  const refQ = m26 ? m26.reference_quarter : '2T26';
+
+  setNodeText('partial-badge-top', `2026* · ${m26 ? m26.partial_label : 'parcial até 2T26'}`);
+
+  if (viewMode === 'closed_years') {
+    setNodeText('metric-customers-label', 'Clientes · 4T25 (fechado)');
+    setNodeText('metric-customers', `${fmt1.format(h.customers_m)} mi`);
+    setNodeText('metric-customers-note', `+${fmt0.format(h.customer_growth_pct)}% entre 2021 e 2025`);
+
+    setNodeText('metric-revenue-label', 'Receita anual · 2025 (20-F)');
+    setNodeText('metric-revenue', usdB(h.revenue_usd_b));
+    setNodeText('metric-revenue-note', `${fmt1.format(h.revenue_multiple)}× o nível de 2021`);
+
+    setNodeText('metric-income-label', 'Lucro líquido IFRS · 2025');
+    setNodeText('metric-income', usdB(h.net_income_usd_b));
+    setNodeText('metric-income-note', 'IFRS · exercício fechado 2025');
+
+    setNodeText('metric-deposits-label', 'Depósitos · 4T25 (fechado)');
+    setNodeText('metric-deposits', usdB(h.deposits_usd_b, 1));
+    setNodeText('metric-deposits-note', `${fmt1.format(h.deposit_multiple)}× o nível de 2021`);
+    return;
+  }
+
+  if (viewMode === 'ytd_comparison' && m26) {
+    const ytd = m26.ytd_comparison;
+    const stk = m26.stocks_latest;
+    setNodeText('metric-customers-label', `Clientes · estoque em ${refQ}*`);
+    setNodeText('metric-customers', `${fmt1.format(stk.clientes_m)} mi`);
+    setNodeText('metric-customers-note', `+${fmt1.format(stk.clientes_yoy_pct)}% vs. 2T25 (parcial até ${refQ})`);
+
+    setNodeText('metric-revenue-label', `Receita · ${ytd.label_2026}* (parcial)`);
+    setNodeText('metric-revenue', usdB(ytd.revenue_2026_usd_b));
+    setNodeText('metric-revenue-note', `+${fmt1.format(ytd.revenue_yoy_pct)}% vs. ${ytd.label_2025} (${usdB(ytd.revenue_2025_usd_b)})`);
+
+    setNodeText('metric-income-label', `Lucro líquido IFRS · ${ytd.label_2026}*`);
+    setNodeText('metric-income', usdB(ytd.net_income_2026_usd_b));
+    setNodeText('metric-income-note', `+${fmt1.format(ytd.net_income_yoy_pct)}% vs. ${ytd.label_2025} (${usdB(ytd.net_income_2025_usd_b)})`);
+
+    setNodeText('metric-deposits-label', `Depósitos · estoque em ${refQ}*`);
+    setNodeText('metric-deposits', usdB(stk.depositos_usd_b, 1));
+    setNodeText('metric-deposits-note', `+${fmt1.format(stk.depositos_yoy_pct)}% vs. 2T25 (US$ ${fmt1.format(36.6)} bi)`);
+    return;
+  }
+
+  if (viewMode === 'quarterly' && m26) {
+    const qList = data.financial_quarterly || [];
+    const lastQ = qList[qList.length - 1];
+    const stk = m26.stocks_latest;
+    setNodeText('metric-customers-label', `Clientes · estoque em ${refQ}*`);
+    setNodeText('metric-customers', `${fmt1.format(stk.clientes_m)} mi`);
+    setNodeText('metric-customers-note', `+${fmt1.format(stk.clientes_yoy_pct)}% YoY vs. 2T25`);
+
+    setNodeText('metric-revenue-label', `Receita trimestral · ${refQ}*`);
+    setNodeText('metric-revenue', usdB(lastQ ? lastQ.receita : null));
+    setNodeText('metric-revenue-note', `Trimestre isolado ${refQ} (parcial 2026*)`);
+
+    setNodeText('metric-income-label', `Lucro líquido IFRS · ${refQ}*`);
+    setNodeText('metric-income', usdB(lastQ ? lastQ.lucro_liquido_ifrs : null));
+    setNodeText('metric-income-note', `IFRS no trimestre ${refQ} (parcial 2026*)`);
+
+    setNodeText('metric-deposits-label', `Depósitos · estoque em ${refQ}*`);
+    setNodeText('metric-deposits', usdB(stk.depositos_usd_b, 1));
+    setNodeText('metric-deposits-note', `Posição de fechamento do ${refQ}`);
+    return;
+  }
+
+  // Visão LTM padrão (2021–2025 + 2026* LTM 2T26)
+  if (m26) {
+    const ltm = m26.ltm;
+    const stk = m26.stocks_latest;
+    setNodeText('metric-customers-label', `Clientes · ref. ${refQ}* (parcial)`);
+    setNodeText('metric-customers', `${fmt1.format(stk.clientes_m)} mi`);
+    setNodeText('metric-customers-note', `+${fmt0.format(h.customer_growth_to_2026_pct)}% desde 2021 · estoque em ${refQ}`);
+
+    setNodeText('metric-revenue-label', `Receita · LTM ${refQ}* (3T25–2T26)`);
+    setNodeText('metric-revenue', usdB(ltm.revenue_usd_b));
+    setNodeText('metric-revenue-note', `${fmt1.format(h.revenue_ltm_multiple)}× 2021 · soma dos últimos 4 trimestres`);
+
+    setNodeText('metric-income-label', `Lucro líquido IFRS · LTM ${refQ}*`);
+    setNodeText('metric-income', usdB(ltm.net_income_usd_b));
+    setNodeText('metric-income-note', `IFRS · janela LTM (${ltm.start_quarter}–${ltm.end_quarter})`);
+
+    setNodeText('metric-deposits-label', `Depósitos · ref. ${refQ}* (parcial)`);
+    setNodeText('metric-deposits', usdB(stk.depositos_usd_b, 1));
+    setNodeText('metric-deposits-note', `${fmt1.format(h.deposit_2026_multiple)}× 2021 · estoque em ${refQ}`);
+  }
+}
+
+function renderGrowth(data, viewMode = currentView) {
+  const f = getActiveFinancialSeries(data, viewMode);
+  const x = f.map(r => r.xLabel);
+  const barColors = f.map(r => (r.isPartial ? PARTIAL_AMBER : PURPLE));
+  const barPatterns = f.map(r => (r.isPartial ? '/' : ''));
 
   safePlot('chart-revenue-income', [
     {
-      type: 'bar', x, y: values(f, 'revenue_usd_b'), name: 'Receita', marker: { color: PURPLE },
+      type: 'bar',
+      x,
+      y: values(f, 'revenue_usd_b'),
+      name: 'Receita (2026* hachurado = parcial)',
+      marker: {
+        color: barColors,
+        pattern: { shape: barPatterns },
+      },
       hovertemplate: '<b>%{x}</b><br>Receita: US$ %{y:.2f} bi<extra></extra>',
     },
     {
-      type: 'scatter', mode: 'lines+markers', x, y: values(f, 'net_income_usd_b'), name: 'Lucro líquido',
-      line: { color: PURPLE_DARK, width: 3 }, marker: { size: 8 },
-      hovertemplate: '<b>%{x}</b><br>Lucro líquido: US$ %{y:.2f} bi<extra></extra>',
+      type: 'scatter',
+      mode: 'lines+markers',
+      x,
+      y: values(f, 'net_income_usd_b'),
+      name: 'Lucro líquido IFRS',
+      line: { color: PURPLE_DARK, width: 3 },
+      marker: {
+        size: f.map(r => (r.isPartial ? 11 : 8)),
+        symbol: f.map(r => (r.isPartial ? 'diamond' : 'circle')),
+      },
+      hovertemplate: '<b>%{x}</b><br>Lucro líquido IFRS: US$ %{y:.2f} bi<extra></extra>',
     },
   ], layout({ yaxis: { title: 'US$ bilhões', gridcolor: GRID, zerolinecolor: '#BEB6C2' }, barmode: 'overlay' }));
 
   safePlot('chart-scale', [
     {
-      type: 'scatter', mode: 'lines+markers', x, y: values(f, 'customers_m'), name: 'Clientes',
-      line: { color: PURPLE, width: 4 }, marker: { size: 8 },
+      type: 'scatter',
+      mode: 'lines+markers',
+      x,
+      y: values(f, 'customers_m'),
+      name: 'Clientes (estoque)',
+      line: { color: PURPLE, width: 4 },
+      marker: {
+        size: f.map(r => (r.isPartial ? 11 : 8)),
+        symbol: f.map(r => (r.isPartial ? 'diamond' : 'circle')),
+      },
       hovertemplate: '<b>%{x}</b><br>Clientes: %{y:.1f} mi<extra></extra>',
     },
     {
-      type: 'bar', x, y: values(f, 'deposits_usd_b'), name: 'Depósitos', yaxis: 'y2', opacity: .58,
-      marker: { color: PURPLE_SOFT },
+      type: 'bar',
+      x,
+      y: values(f, 'deposits_usd_b'),
+      name: 'Depósitos (estoque)',
+      yaxis: 'y2',
+      opacity: 0.62,
+      marker: {
+        color: f.map(r => (r.isPartial ? '#E7B977' : PURPLE_SOFT)),
+        pattern: { shape: barPatterns },
+      },
       hovertemplate: '<b>%{x}</b><br>Depósitos: US$ %{y:.1f} bi<extra></extra>',
     },
   ], layout({
@@ -109,26 +268,53 @@ function renderGrowth(data) {
 
   safePlot('chart-arpac', [
     {
-      type: 'scatter', mode: 'lines+markers', x, y: values(f, 'arpac_usd'), name: 'ARPAC mensal',
-      line: { color: PURPLE, width: 4 }, marker: { size: 8 },
+      type: 'scatter',
+      mode: 'lines+markers',
+      x,
+      y: values(f, 'arpac_usd'),
+      name: 'ARPAC mensal',
+      line: { color: PURPLE, width: 4 },
+      marker: {
+        size: f.map(r => (r.isPartial ? 11 : 8)),
+        symbol: f.map(r => (r.isPartial ? 'diamond' : 'circle')),
+      },
       hovertemplate: '<b>%{x}</b><br>ARPAC: US$ %{y:.1f}<extra></extra>',
     },
     {
-      type: 'scatter', mode: 'lines+markers', x, y: values(f, 'cost_to_serve_usd'), name: 'Custo de servir',
-      line: { color: '#7B7480', width: 2.5, dash: 'dot' }, marker: { size: 7 },
+      type: 'scatter',
+      mode: 'lines+markers',
+      x,
+      y: values(f, 'cost_to_serve_usd'),
+      name: 'Custo de servir',
+      line: { color: '#7B7480', width: 2.5, dash: 'dot' },
+      marker: { size: 7 },
       hovertemplate: '<b>%{x}</b><br>Custo: US$ %{y:.1f}<extra></extra>',
     },
   ], layout({ yaxis: { title: 'US$ / cliente ativo / mês', gridcolor: GRID } }));
 
   const portfolio = f.filter(row => row.credit_portfolio_usd_b != null);
+  const pLabels = portfolio.map(r => r.xLabel);
+  const pPatterns = portfolio.map(r => (r.isPartial ? '/' : ''));
+
   safePlot('chart-portfolio', [
     {
-      type: 'bar', x: years(portfolio), y: values(portfolio, 'credit_portfolio_usd_b'), name: 'Cartão + empréstimos pessoais',
-      marker: { color: PURPLE }, hovertemplate: '<b>%{x}</b><br>US$ %{y:.1f} bi<extra></extra>',
+      type: 'bar',
+      x: pLabels,
+      y: values(portfolio, 'credit_portfolio_usd_b'),
+      name: 'Carteira total (cartão + empréstimos)',
+      marker: {
+        color: portfolio.map(r => (r.isPartial ? PARTIAL_AMBER : PURPLE)),
+        pattern: { shape: pPatterns },
+      },
+      hovertemplate: '<b>%{x}</b><br>Carteira total: US$ %{y:.1f} bi<extra></extra>',
     },
     {
-      type: 'bar', x: years(portfolio), y: values(portfolio, 'interest_earning_portfolio_usd_b'), name: 'Carteira geradora de juros',
-      marker: { color: '#D9B9ED' }, hovertemplate: '<b>%{x}</b><br>US$ %{y:.1f} bi<extra></extra>',
+      type: 'bar',
+      x: pLabels,
+      y: values(portfolio, 'interest_earning_portfolio_usd_b'),
+      name: 'Carteira geradora de juros (IEP)',
+      marker: { color: '#D9B9ED' },
+      hovertemplate: '<b>%{x}</b><br>IEP: US$ %{y:.1f} bi<extra></extra>',
     },
   ], layout({ barmode: 'group', yaxis: { title: 'US$ bilhões', gridcolor: GRID } }));
 
@@ -136,45 +322,80 @@ function renderGrowth(data) {
   const last = f[f.length - 1];
   const arpacGrowth = (last.arpac_usd / first.arpac_usd - 1) * 100;
   const insights = [
-    ['Receita', `${fmt1.format(last.revenue_usd_b / first.revenue_usd_b)}×`, `${usdB(first.revenue_usd_b)} → ${usdB(last.revenue_usd_b)}`],
-    ['Clientes', `${fmt1.format(last.customers_m / first.customers_m)}×`, `${fmt1.format(first.customers_m)} mi → ${fmt1.format(last.customers_m)} mi`],
-    ['ARPAC mensal', `+${fmt0.format(arpacGrowth)}%`, `US$ ${fmt1.format(first.arpac_usd)} → US$ ${fmt1.format(last.arpac_usd)}`],
+    ['Receita (' + last.xLabel + ')', `${fmt1.format(last.revenue_usd_b / first.revenue_usd_b)}×`, `${usdB(first.revenue_usd_b)} → ${usdB(last.revenue_usd_b)}`],
+    ['Clientes (' + last.xLabel + ')', `${fmt1.format(last.customers_m / first.customers_m)}×`, `${fmt1.format(first.customers_m)} mi → ${fmt1.format(last.customers_m)} mi`],
+    ['ARPAC mensal', `+${fmt0.format(arpacGrowth)}%`, `US$ ${fmt1.format(first.arpac_usd)} → US$ ${fmt1.format(last.arpac_usd)} (${last.isPartial ? 'ref. 2T26 parcial' : 'fechado'})`],
   ];
   document.getElementById('growth-insights').innerHTML = insights.map(([label, value, note]) => `
     <div class="insight"><span>${label}</span><strong>${value}</strong><p>${note}</p></div>
   `).join('');
 }
 
-function renderProfitability(data) {
-  const f = data.financial;
-  const x = years(f);
+function renderProfitability(data, viewMode = currentView) {
+  const f = getActiveFinancialSeries(data, viewMode);
+  const x = f.map(r => r.xLabel);
   const income = values(f, 'net_income_usd_b');
+  const colors = f.map(r => {
+    if (r.net_income_usd_b < 0) return NEGATIVE;
+    return r.isPartial ? PARTIAL_AMBER : POSITIVE;
+  });
+  const patterns = f.map(r => (r.isPartial ? '/' : ''));
 
   safePlot('chart-income', [{
-    type: 'bar', x, y: income,
-    marker: { color: income.map(v => v < 0 ? NEGATIVE : POSITIVE) },
-    text: income.map(v => usdB(v)), textposition: 'outside', cliponaxis: false,
-    hovertemplate: '<b>%{x}</b><br>Lucro líquido: US$ %{y:.2f} bi<extra></extra>',
+    type: 'bar',
+    x,
+    y: income,
+    marker: {
+      color: colors,
+      pattern: { shape: patterns },
+    },
+    text: income.map(v => usdB(v)),
+    textposition: 'outside',
+    cliponaxis: false,
+    hovertemplate: '<b>%{x}</b><br>Lucro líquido IFRS: US$ %{y:.2f} bi<extra></extra>',
   }], layout({ showlegend: false, yaxis: { title: 'US$ bilhões', gridcolor: GRID, zerolinecolor: '#BEB6C2' } }));
 
-  const grossMargin = f.map(row => row.gross_profit_usd_b / row.revenue_usd_b * 100);
-  const netMargin = f.map(row => row.net_income_usd_b / row.revenue_usd_b * 100);
-  safePlot('chart-margins', [
-    {
-      type: 'scatter', mode: 'lines+markers', x, y: grossMargin, name: 'Margem bruta',
-      line: { color: PURPLE, width: 4 }, marker: { size: 8 }, hovertemplate: '<b>%{x}</b><br>Margem bruta: %{y:.1f}%<extra></extra>',
+  const grossMargin = f.map(row => (row.gross_profit_usd_b != null && row.revenue_usd_b ? (row.gross_profit_usd_b / row.revenue_usd_b) * 100 : null));
+  const netMargin = f.map(row => (row.net_income_usd_b != null && row.revenue_usd_b ? (row.net_income_usd_b / row.revenue_usd_b) * 100 : null));
+  const traces = [];
+  if (grossMargin.some(v => v != null)) {
+    traces.push({
+      type: 'scatter',
+      mode: 'lines+markers',
+      x,
+      y: grossMargin,
+      name: 'Margem bruta',
+      connectgaps: false,
+      line: { color: PURPLE, width: 4 },
+      marker: { size: 8 },
+      hovertemplate: '<b>%{x}</b><br>Margem bruta: %{y:.1f}%<extra></extra>',
+    });
+  }
+  traces.push({
+    type: 'scatter',
+    mode: 'lines+markers',
+    x,
+    y: netMargin,
+    name: 'Margem líquida IFRS',
+    line: { color: PURPLE_DARK, width: 3 },
+    marker: {
+      size: f.map(r => (r.isPartial ? 11 : 8)),
+      symbol: f.map(r => (r.isPartial ? 'diamond' : 'circle')),
     },
-    {
-      type: 'scatter', mode: 'lines+markers', x, y: netMargin, name: 'Margem líquida',
-      line: { color: PURPLE_DARK, width: 3 }, marker: { size: 8 }, hovertemplate: '<b>%{x}</b><br>Margem líquida: %{y:.1f}%<extra></extra>',
-    },
-  ], layout({ yaxis: { title: '% da receita', ticksuffix: '%', gridcolor: GRID, zerolinecolor: '#BEB6C2' } }));
+    hovertemplate: '<b>%{x}</b><br>Margem líquida IFRS: %{y:.1f}%<extra></extra>',
+  });
 
-  const firstPositive = f.find(row => row.net_income_usd_b > 0);
+  safePlot('chart-margins', traces, layout({ yaxis: { title: '% da receita', ticksuffix: '%', gridcolor: GRID, zerolinecolor: '#BEB6C2' } }));
+
   const latest = f[f.length - 1];
-  document.getElementById('profit-insight').innerHTML = firstPositive
-    ? `<strong>Ponto de inflexão:</strong> o lucro líquido IFRS passa ao campo positivo em <b>${firstPositive.year}</b> e alcança <b>${usdB(latest.net_income_usd_b)}</b> em ${latest.year}.`
-    : '<strong>Leitura:</strong> a série selecionada ainda não apresenta lucro líquido positivo.';
+  const m26 = data.metrics_2026;
+  if (m26) {
+    document.getElementById('profit-insight').innerHTML =
+      `<strong>Leitura de rentabilidade (2021–2026*):</strong> o lucro líquido IFRS tornou-se positivo em <b>2023</b>, fechou <b>2025</b> em <b>${usdB(2.8717)}</b> (20-F) e atingiu <b>${usdB(m26.ltm.net_income_usd_b)}</b> em <b>${m26.ltm.label}</b> (ou <b>${usdB(m26.ytd_comparison.net_income_2026_usd_b)}</b> no acumulado parcial <b>${m26.ytd_comparison.label_2026}</b> vs. <b>${usdB(m26.ytd_comparison.net_income_2025_usd_b)}</b> no <b>${m26.ytd_comparison.label_2025}</b>, alta de <b>+${fmt1.format(m26.ytd_comparison.net_income_yoy_pct)}%</b>).`;
+  } else {
+    document.getElementById('profit-insight').innerHTML =
+      `<strong>Ponto de inflexão:</strong> o lucro líquido IFRS alcança <b>${usdB(latest.net_income_usd_b)}</b> em ${latest.xLabel}.`;
+  }
 }
 
 function renderRisk(data) {
@@ -208,29 +429,33 @@ function renderRisk(data) {
     },
   ], layout({ yaxis: { title: '%', ticksuffix: '%', gridcolor: GRID }, xaxis: { gridcolor: GRID, type: 'date' } }));
 
-  const detail = data.risk_2025;
+  const detail = Array.isArray(data.risk_detail_by_period) && data.risk_detail_by_period.length
+    ? data.risk_detail_by_period
+    : data.risk_2025;
+  const xDetail = detail.map(r => r.trimestre || r.quarter);
+
   safePlot('chart-credit-risk', [{
-    type: 'bar', x: values(detail, 'quarter'), y: values(detail, 'rwa_credito_brl_b'),
+    type: 'bar', x: xDetail, y: values(detail, 'rwa_credito_brl_b'),
     marker: { color: PURPLE }, text: values(detail, 'rwa_credito_brl_b').map(v => `R$ ${fmt1.format(v)} bi`), textposition: 'outside',
     hovertemplate: '<b>%{x}</b><br>RWA crédito: R$ %{y:.1f} bi<extra></extra>',
   }], layout({ showlegend: false, yaxis: { title: 'R$ bilhões', gridcolor: GRID } }));
 
   safePlot('chart-market-risk', [
     {
-      type: 'bar', x: values(detail, 'quarter'), y: values(detail, 'rwa_juros_brl_m'), name: 'Juros', marker: { color: PURPLE_MID },
+      type: 'bar', x: xDetail, y: values(detail, 'rwa_juros_brl_m'), name: 'Juros', marker: { color: PURPLE_MID },
       hovertemplate: '<b>%{x}</b><br>Juros: R$ %{y:.1f} mi<extra></extra>',
     },
     {
-      type: 'bar', x: values(detail, 'quarter'), y: values(detail, 'rwa_cambio_brl_m'), name: 'Câmbio', marker: { color: '#D8AFE9' },
+      type: 'bar', x: xDetail, y: values(detail, 'rwa_cambio_brl_m'), name: 'Câmbio', marker: { color: '#D8AFE9' },
       hovertemplate: '<b>%{x}</b><br>Câmbio: R$ %{y:.1f} mi<extra></extra>',
     },
   ], layout({ barmode: 'group', yaxis: { title: 'R$ milhões', gridcolor: GRID } }));
 
   if (detail.length >= 2) {
     const latest = detail[detail.length - 1];
-    const prior = detail[detail.length - 2];
-    const multiple = latest.rwa_cambio_brl_m / prior.rwa_cambio_brl_m;
-    document.getElementById('risk-insight').innerHTML = `<strong>Sinal para investigação:</strong> no recorte disponível, o RWA cambial de ${latest.quarter}/2025 é <b>${fmt1.format(multiple)}×</b> o valor de ${prior.quarter}. A análise destaca a mudança, mas não atribui causalidade sem suporte das notas regulatórias.`;
+    const qLabel = latest.trimestre || latest.quarter;
+    document.getElementById('risk-insight').innerHTML =
+      `<strong>Último trimestre prudencial disponível (${qLabel}):</strong> Índice de Basileia de <b>${fmt2.format(latest.basel_index_pct)}%</b>, Capital Principal de <b>R$ ${fmt2.format(latest.capital_principal_brl_b)} bi</b> e RWA total de <b>R$ ${fmt1.format(latest.rwa_total_brl_b)} bi</b>. Valores mantidos em R$ conforme divulgação do Pilar 3/BCB.`;
   }
 }
 
@@ -391,16 +616,37 @@ function renderSources(data) {
   `).join('');
 }
 
+function setupViewSelector(data) {
+  const buttons = document.querySelectorAll('.view-btn[data-view]');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const nextView = btn.getAttribute('data-view');
+      if (!nextView) return;
+      currentView = nextView;
+      buttons.forEach(b => {
+        const isActive = b === btn;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      renderHeadline(data, currentView);
+      renderGrowth(data, currentView);
+      renderProfitability(data, currentView);
+    });
+  });
+}
+
 async function init() {
   try {
     const response = await fetch('data/dashboard-data.json', { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    dashboardPayload = data;
 
-    renderHeadline(data);
+    setupViewSelector(data);
+    renderHeadline(data, currentView);
     renderMarket(data);
-    renderGrowth(data);
-    renderProfitability(data);
+    renderGrowth(data, currentView);
+    renderProfitability(data, currentView);
     renderRisk(data);
     renderCustomer(data);
     renderSources(data);

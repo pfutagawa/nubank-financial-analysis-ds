@@ -11,10 +11,13 @@ from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 from src.data_pipeline import (
+    compute_metrics_2026,
     customer_summary,
     load_capital_risk_history,
     load_customer_sample,
     load_financial_history,
+    load_financial_quarterly,
+    load_risk_detail_by_period,
 )
 
 
@@ -69,7 +72,21 @@ def load_market_history() -> pd.DataFrame:
         try:
             client = MongoClient(mongo_uri, serverSelectionTimeoutMS=8000, connectTimeoutMS=8000)
             collection = client["nubank_db"]["historico_diario"]
-            docs = list(collection.find({}, {"_id": 0, "ticker": 1, "datetime": 1, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}))
+            docs = list(
+                collection.find(
+                    {},
+                    {
+                        "_id": 0,
+                        "ticker": 1,
+                        "datetime": 1,
+                        "open": 1,
+                        "high": 1,
+                        "low": 1,
+                        "close": 1,
+                        "volume": 1,
+                    },
+                )
+            )
         except PyMongoError as exc:
             print(f"Aviso MongoDB ({type(exc).__name__}): usando fallback local se disponível.")
             docs = []
@@ -93,13 +110,110 @@ def load_market_history() -> pd.DataFrame:
     return df[["ticker", "datetime", "open", "high", "low", "close", "volume"]]
 
 
+def _build_views(
+    financial: pd.DataFrame,
+    quarterly: pd.DataFrame,
+    metrics_2026: dict[str, Any],
+) -> dict[str, Any]:
+    """Constrói as visões obrigatórias para o dashboard sem misturar 2026 parcial com anos fechados."""
+    closed_rows = []
+    for row in records(financial):
+        closed_rows.append(
+            {
+                **row,
+                "period_label": str(row["year"]),
+                "parcial": "não",
+                "is_partial": False,
+                "reference_note": f"Ano fechado {row['year']} (20-F)",
+            }
+        )
+
+    ref_q = metrics_2026["reference_quarter"]
+    ltm = metrics_2026["ltm"]
+    ytd = metrics_2026["ytd_comparison"]
+    stocks = metrics_2026["stocks_latest"]
+
+    ltm_2026_row = {
+        "year": 2026,
+        "period_label": f"2026* (LTM {ref_q})",
+        "short_label": f"2026* ({ metrics_2026['partial_label'] })",
+        "parcial": "sim",
+        "is_partial": True,
+        "reference_note": f"{ltm['label']} · estoques em {ref_q}",
+        "customers_m": stocks["clientes_m"],
+        "active_customers_m": None,
+        "activity_rate_pct": None,
+        "arpac_usd": stocks["arpac_trimestre_usd"],
+        "cost_to_serve_usd": stocks["custo_servir_trimestre_usd"],
+        "revenue_usd_b": ltm["revenue_usd_b"],
+        "gross_profit_usd_b": None,
+        "gross_margin_pct": None,
+        "net_income_usd_b": ltm["net_income_usd_b"],
+        "adjusted_net_income_usd_b": None,
+        "deposits_usd_b": stocks["depositos_usd_b"],
+        "credit_portfolio_usd_b": stocks["carteira_credito_usd_b"],
+        "interest_earning_portfolio_usd_b": None,
+        "source_url": stocks["fonte_url"],
+    }
+
+    q_2025_2q = quarterly[(quarterly["ano"] == 2025) & (quarterly["trimestre"] == "2T25")].iloc[0]
+    ytd_rows = [
+        {
+            "year": 2025,
+            "period_label": f"2025 ({ytd['label_2025']})",
+            "parcial": "não",
+            "is_partial": False,
+            "reference_note": f"Mesmo período de 2025 ({', '.join(ytd['quarters_2025'])}) · estoques em 2T25",
+            "customers_m": float(q_2025_2q["clientes"]),
+            "arpac_usd": float(q_2025_2q["arpac_mensal"]),
+            "arpac_ytd_avg_usd": ytd["arpac_ytd_2025_usd"],
+            "cost_to_serve_usd": float(q_2025_2q["custo_servir_mensal"]),
+            "cost_to_serve_ytd_avg_usd": ytd["cost_to_serve_ytd_2025_usd"],
+            "revenue_usd_b": ytd["revenue_2025_usd_b"],
+            "net_income_usd_b": ytd["net_income_2025_usd_b"],
+            "net_margin_pct": ytd["net_margin_2025_pct"],
+            "deposits_usd_b": float(q_2025_2q["depositos"]),
+            "credit_portfolio_usd_b": float(q_2025_2q["carteira_credito"]),
+            "interest_earning_portfolio_usd_b": clean_value(q_2025_2q["carteira_credito_juros"]),
+        },
+        {
+            "year": 2026,
+            "period_label": f"2026* (parcial até {ref_q})",
+            "parcial": "sim",
+            "is_partial": True,
+            "reference_note": f"Acumulado 2026 ({', '.join(ytd['quarters_2026'])}) · estoques em {ref_q}",
+            "customers_m": stocks["clientes_m"],
+            "arpac_usd": stocks["arpac_trimestre_usd"],
+            "arpac_ytd_avg_usd": ytd["arpac_ytd_2026_usd"],
+            "cost_to_serve_usd": stocks["custo_servir_trimestre_usd"],
+            "cost_to_serve_ytd_avg_usd": ytd["cost_to_serve_ytd_2026_usd"],
+            "revenue_usd_b": ytd["revenue_2026_usd_b"],
+            "net_income_usd_b": ytd["net_income_2026_usd_b"],
+            "net_margin_pct": ytd["net_margin_2026_pct"],
+            "deposits_usd_b": stocks["depositos_usd_b"],
+            "credit_portfolio_usd_b": stocks["carteira_credito_usd_b"],
+            "interest_earning_portfolio_usd_b": None,
+        },
+    ]
+
+    return {
+        "closed_years": closed_rows,
+        "ltm": closed_rows + [ltm_2026_row],
+        "ytd_comparison": ytd_rows,
+        "quarterly": records(quarterly),
+    }
+
+
 def build_payload() -> dict[str, Any]:
     financial = load_financial_history()
+    financial_quarterly = load_financial_quarterly()
     risk, risk_source = load_capital_risk_history()
+    risk_detail_all = load_risk_detail_by_period()
     complaints, complaints_source = load_customer_sample()
-    risk_detail = pd.read_csv(ROOT / "data" / "processed" / "risk_2025_detail.csv")
+    risk_detail_2025 = pd.read_csv(ROOT / "data" / "processed" / "risk_2025_detail.csv")
     manifest = pd.read_csv(ROOT / "data" / "source_manifest.csv")
     market = load_market_history()
+    metrics_2026 = compute_metrics_2026(financial, financial_quarterly, risk)
 
     summary = customer_summary(complaints)
     latest = financial.iloc[-1]
@@ -128,24 +242,47 @@ def build_payload() -> dict[str, Any]:
     return {
         "meta": {
             "title": "Nubank em Dados",
-            "period": "2021–2025",
-            "generated_from": "datasets versionados no próprio repositório e MongoDB (historico_diario)",
+            "period": "2021–2026*",
+            "partial_year": 2026,
+            "partial_reference": metrics_2026["reference_quarter"],
+            "partial_label": metrics_2026["partial_label"],
+            "generated_from": "datasets versionados no próprio repositório (2021–2026*) e MongoDB (historico_diario)",
             "risk_source": risk_source,
         },
         "headline": {
             "latest_year": int(latest["year"]),
+            "reference_quarter_2026": metrics_2026["reference_quarter"],
             "customers_m": float(latest["customers_m"]),
+            "customers_2026_m": metrics_2026["stocks_latest"]["clientes_m"],
             "revenue_usd_b": float(latest["revenue_usd_b"]),
+            "revenue_ltm_2026_usd_b": metrics_2026["ltm"]["revenue_usd_b"],
+            "revenue_ytd_2026_usd_b": metrics_2026["ytd_comparison"]["revenue_2026_usd_b"],
             "net_income_usd_b": float(latest["net_income_usd_b"]),
+            "net_income_ltm_2026_usd_b": metrics_2026["ltm"]["net_income_usd_b"],
+            "net_income_ytd_2026_usd_b": metrics_2026["ytd_comparison"]["net_income_2026_usd_b"],
             "deposits_usd_b": float(latest["deposits_usd_b"]),
+            "deposits_2026_usd_b": metrics_2026["stocks_latest"]["depositos_usd_b"],
             "customer_growth_pct": round(float((latest["customers_m"] / first["customers_m"] - 1) * 100), 1),
+            "customer_growth_to_2026_pct": round(
+                float((metrics_2026["stocks_latest"]["clientes_m"] / first["customers_m"] - 1) * 100), 1
+            ),
             "revenue_multiple": round(float(latest["revenue_usd_b"] / first["revenue_usd_b"]), 1),
+            "revenue_ltm_multiple": round(
+                float(metrics_2026["ltm"]["revenue_usd_b"] / first["revenue_usd_b"]), 1
+            ),
             "deposit_multiple": round(float(latest["deposits_usd_b"] / first["deposits_usd_b"]), 1),
+            "deposit_2026_multiple": round(
+                float(metrics_2026["stocks_latest"]["depositos_usd_b"] / first["deposits_usd_b"]), 1
+            ),
         },
+        "metrics_2026": metrics_2026,
+        "views": _build_views(financial, financial_quarterly, metrics_2026),
         "market": records(market),
         "financial": records(financial),
+        "financial_quarterly": records(financial_quarterly),
         "risk": records(risk),
-        "risk_2025": records(risk_detail),
+        "risk_2025": records(risk_detail_2025),
+        "risk_detail_by_period": records(risk_detail_all),
         "customer": customer,
         "sources": records(manifest),
     }

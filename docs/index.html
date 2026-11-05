@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Nubank em Dados: análise de crescimento, rentabilidade, capital e risco entre 2021 e 2025.">
+  <meta name="description" content="Nubank em Dados: análise de crescimento, rentabilidade, capital e risco entre 2021 e 2026* (ano parcial até 2T26).">
   <meta name="theme-color" content="#2f0549">
-  <title>Nubank em Dados | 2021–2025</title>
+  <title>Nubank em Dados | 2021–2026*</title>
   <link rel="stylesheet" href="css/style.css">
   <script defer src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
   <script defer src="js/dashboard.js"></script>
@@ -34,38 +34,62 @@
   <main id="conteudo">
     <section class="hero shell" id="topo">
       <div class="hero-copy">
-        <p class="eyebrow">Ciência de Dados & Analytics · 2021–2025</p>
+        <p class="eyebrow">Ciência de Dados & Analytics · 2021–2026*</p>
         <h1>Crescimento em escala. Rentabilidade em transformação. Risco sob acompanhamento.</h1>
-        <p class="hero-lead">Uma leitura integrada da evolução do Nubank a partir de cotações históricas de mercado (MongoDB), resultados financeiros oficiais, dados regulatórios do Pilar 3 e sinais complementares da experiência do cliente.</p>
+        <p class="hero-lead">Uma leitura integrada da evolução do Nubank entre 2021 e 2026* (ano parcial até 2T26) a partir de cotações históricas de mercado (MongoDB), resultados financeiros oficiais (SEC 20-F e 6-K), dados regulatórios do Pilar 3 e sinais complementares da experiência do cliente.</p>
         <div class="hero-actions">
-          <a class="button primary" href="#mercado">Explorar cotações</a>
-          <a class="button secondary" href="#crescimento">Ver fundamentos</a>
+          <a class="button primary" href="#crescimento">Ver fundamentos 2021–2026*</a>
+          <a class="button secondary" href="#mercado">Explorar cotações</a>
         </div>
       </div>
       <aside class="hero-question" aria-label="Pergunta de negócio">
         <span>Pergunta de negócio</span>
-        <p>Como a expansão acelerada do Nubank se converteu em monetização, rentabilidade e desempenho de mercado — e quais sinais de capital, risco e experiência do cliente acompanharam essa trajetória?</p>
+        <p>Como a expansão acelerada do Nubank entre 2021 e 2026* se converteu em monetização, rentabilidade e desempenho de mercado — e quais sinais de capital, risco e experiência do cliente acompanharam essa trajetória?</p>
       </aside>
+    </section>
+
+    <section class="shell view-selector-bar" aria-label="Seletor de visão temporal para 2026 parcial">
+      <div class="view-selector-head">
+        <span class="filter-label">Visão analítica (tratamento de 2026* parcial):</span>
+        <span class="partial-badge" id="partial-badge-top">2026* · parcial até 2T26</span>
+      </div>
+      <div class="view-buttons" role="tablist" aria-label="Modo de comparação">
+        <button type="button" class="view-btn active" data-view="ltm" role="tab" aria-selected="true">
+          2021–2025 + 2026* (LTM 2T26)
+        </button>
+        <button type="button" class="view-btn" data-view="ytd_comparison" role="tab" aria-selected="false">
+          2026* acumulado (YTD) vs. mesmo período de 2025
+        </button>
+        <button type="button" class="view-btn" data-view="closed_years" role="tab" aria-selected="false">
+          Anos fechados (2021–2025)
+        </button>
+        <button type="button" class="view-btn" data-view="quarterly" role="tab" aria-selected="false">
+          Série trimestral (1T25–2T26*)
+        </button>
+      </div>
+      <p class="view-footnote" id="view-explainer">
+        *Nota metodológica: 2026 não é um ano fechado (o Form 20-F de 2026 só será publicado em 2027). Fluxos (receita e lucro) de 2026* são exibidos em LTM (soma dos últimos 4 trimestres: 3T25–2T26) ou no acumulado do ano (YTD 2T26 vs. YTD 2T25), nunca comparando 2 trimestres diretamente com 12 meses fechados. Estoques (clientes, depósitos e crédito) refletem o último trimestre disponível (2T26).
+      </p>
     </section>
 
     <section class="shell metric-grid" aria-label="Indicadores principais">
       <article class="metric-card">
-        <span>Clientes</span>
+        <span id="metric-customers-label">Clientes · ref. 2T26</span>
         <strong id="metric-customers">—</strong>
         <small id="metric-customers-note">Carregando série…</small>
       </article>
       <article class="metric-card">
-        <span>Receita anual</span>
+        <span id="metric-revenue-label">Receita · LTM 2T26</span>
         <strong id="metric-revenue">—</strong>
         <small id="metric-revenue-note">Carregando série…</small>
       </article>
       <article class="metric-card">
-        <span>Lucro líquido</span>
+        <span id="metric-income-label">Lucro líquido IFRS · LTM 2T26</span>
         <strong id="metric-income">—</strong>
-        <small>IFRS · último ano da série</small>
+        <small id="metric-income-note">IFRS · período de referência</small>
       </article>
       <article class="metric-card">
-        <span>Depósitos</span>
+        <span id="metric-deposits-label">Depósitos · ref. 2T26</span>
         <strong id="metric-deposits">—</strong>
         <small id="metric-deposits-note">Carregando série…</small>
       </article>
@@ -77,7 +101,7 @@
           <p class="eyebrow dark">00 · Mercado e Cotações (MongoDB · Twelve Data)</p>
           <h2>Comparação histórica de ações</h2>
         </div>
-        <p>Séries diárias extraídas manualmente para a coleção <code>historico_diario</code> no MongoDB. Selecione os tickers abaixo para comparar preço de fechamento, evolução normalizada (Base 100) e volume negociado.</p>
+        <p>Séries diárias extraídas manualmente para a coleção <code>historico_diario</code> no MongoDB (1.000 pregões até 08/10/2026). Selecione os tickers abaixo para comparar preço de fechamento, evolução normalizada (Base 100) e volume negociado.</p>
       </div>
 
       <div class="ticker-filter-bar" role="group" aria-label="Filtro interativo de tickers">
@@ -114,34 +138,34 @@
     <section class="section shell" id="crescimento">
       <div class="section-head">
         <div>
-          <p class="eyebrow dark">01 · Crescimento e monetização</p>
+          <p class="eyebrow dark">01 · Crescimento e monetização (2021–2026*)</p>
           <h2>Escala só importa quando se converte em valor</h2>
         </div>
-        <p>Clientes, receita, depósitos e ARPAC são observados em conjunto para separar simples expansão de base de avanço efetivo da monetização.</p>
+        <p>Clientes, receita, depósitos e ARPAC são observados em conjunto. Barras hachuradas indicam períodos parciais de 2026* (parcial até 2T26), diferenciados dos exercícios fechados 2021–2025.</p>
       </div>
 
       <div class="chart-grid two">
         <article class="panel chart-panel">
           <div class="panel-copy">
-            <h3>Receita e lucro líquido</h3>
-            <p>O contraste mostra a transição entre expansão de receita e geração consistente de resultado.</p>
+            <h3 id="title-revenue-income">Receita e lucro líquido IFRS</h3>
+            <p id="subtitle-revenue-income">O contraste mostra a transição entre expansão de receita e geração consistente de resultado (2026* destacado como parcial).</p>
           </div>
-          <div id="chart-revenue-income" class="chart" role="img" aria-label="Gráfico de receita e lucro líquido por ano"></div>
+          <div id="chart-revenue-income" class="chart" role="img" aria-label="Gráfico de receita e lucro líquido"></div>
         </article>
         <article class="panel chart-panel">
           <div class="panel-copy">
-            <h3>Clientes e depósitos</h3>
-            <p>A escala da base é lida em paralelo à capacidade de captar e manter recursos.</p>
+            <h3 id="title-scale">Clientes e depósitos</h3>
+            <p id="subtitle-scale">A escala da base é lida em paralelo à capacidade de captar recursos (estoques de 2026* no fechamento do 2T26).</p>
           </div>
-          <div id="chart-scale" class="chart" role="img" aria-label="Gráfico de clientes e depósitos por ano"></div>
+          <div id="chart-scale" class="chart" role="img" aria-label="Gráfico de clientes e depósitos"></div>
         </article>
       </div>
 
       <div class="chart-grid split">
         <article class="panel chart-panel">
           <div class="panel-copy">
-            <h3>Monetização por cliente</h3>
-            <p>ARPAC mensal comparado ao custo mensal de servir um cliente ativo.</p>
+            <h3 id="title-arpac">Monetização por cliente (ARPAC vs. Custo de servir)</h3>
+            <p id="subtitle-arpac">ARPAC mensal comparado ao custo mensal de servir um cliente ativo (nunca misturando trimestre isolado sem identificação).</p>
           </div>
           <div id="chart-arpac" class="chart small" role="img" aria-label="Gráfico de ARPAC e custo de servir"></div>
         </article>
@@ -150,8 +174,8 @@
 
       <article class="panel chart-panel wide">
         <div class="panel-copy">
-          <h3>Expansão das carteiras</h3>
-          <p>Cartão e empréstimos pessoais em comparação à carteira geradora de juros.</p>
+          <h3>Expansão das carteiras de crédito</h3>
+          <p>Cartão e empréstimos pessoais em comparação à carteira geradora de juros (estoque 2026* em 2T26).</p>
         </div>
         <div id="chart-portfolio" class="chart small" role="img" aria-label="Gráfico das carteiras de crédito"></div>
       </article>
@@ -161,19 +185,19 @@
       <div class="shell">
         <div class="section-head">
           <div>
-            <p class="eyebrow dark">02 · Rentabilidade e eficiência</p>
+            <p class="eyebrow dark">02 · Rentabilidade e eficiência (2021–2026*)</p>
             <h2>Da perda ao lucro em uma base maior</h2>
           </div>
-          <p>O ganho de escala passou a coexistir com margens positivas. A análise mantém IFRS como referência e separa métricas ajustadas quando disponíveis.</p>
+          <p>O ganho de escala passou a coexistir com margens positivas. A análise mantém IFRS como referência e destaca visualmente 2026* como período parcial.</p>
         </div>
 
         <div class="chart-grid two">
           <article class="panel chart-panel">
             <div class="panel-copy">
-              <h3>Lucro líquido anual</h3>
-              <p>Resultado IFRS, com destaque visual para anos negativos e positivos.</p>
+              <h3 id="title-income">Lucro líquido IFRS</h3>
+              <p>Resultado IFRS, com destaque visual para anos negativos, positivos e barra hachurada para 2026* parcial.</p>
             </div>
-            <div id="chart-income" class="chart" role="img" aria-label="Gráfico do lucro líquido anual"></div>
+            <div id="chart-income" class="chart" role="img" aria-label="Gráfico do lucro líquido"></div>
           </article>
           <article class="panel chart-panel">
             <div class="panel-copy">
@@ -191,10 +215,10 @@
     <section class="section shell" id="risco">
       <div class="section-head">
         <div>
-          <p class="eyebrow dark">03 · Capital e risco</p>
+          <p class="eyebrow dark">03 · Capital e risco (Pilar 3)</p>
           <h2>Crescimento exige capacidade de absorção</h2>
         </div>
-        <p>Capital Principal, ativos ponderados pelo risco e índices prudenciais ajudam a ler a expansão do balanço sob a ótica regulatória.</p>
+        <p>Capital Principal, ativos ponderados pelo risco e índices prudenciais em R$ (sem conversão cambial), com posição até o último trimestre disponível na base local.</p>
       </div>
 
       <div class="source-pill" id="risk-source">Pilar 3 · dados regulatórios locais</div>
@@ -219,17 +243,17 @@
       <div class="chart-grid two">
         <article class="panel chart-panel">
           <div class="panel-copy">
-            <h3>RWA de crédito · 2025</h3>
-            <p>Recorte trimestral dos ativos ponderados pelo risco de crédito.</p>
+            <h3>RWA de crédito por trimestre</h3>
+            <p>Recorte trimestral dos ativos ponderados pelo risco de crédito (R$ bilhões).</p>
           </div>
-          <div id="chart-credit-risk" class="chart small" role="img" aria-label="Gráfico de RWA de crédito em 2025"></div>
+          <div id="chart-credit-risk" class="chart small" role="img" aria-label="Gráfico de RWA de crédito"></div>
         </article>
         <article class="panel chart-panel">
           <div class="panel-copy">
-            <h3>RWA de mercado · 2025</h3>
-            <p>Juros e câmbio no recorte Q1–Q3 do detalhamento disponível.</p>
+            <h3>RWA de mercado por trimestre</h3>
+            <p>Juros e câmbio no detalhamento trimestral disponível (R$ milhões).</p>
           </div>
-          <div id="chart-market-risk" class="chart small" role="img" aria-label="Gráfico do RWA de mercado em 2025"></div>
+          <div id="chart-market-risk" class="chart small" role="img" aria-label="Gráfico do RWA de mercado"></div>
         </article>
       </div>
 
@@ -243,7 +267,7 @@
             <p class="eyebrow dark">04 · Experiência do cliente</p>
             <h2>Uma lente complementar, sem extrapolação temporal</h2>
           </div>
-          <p>A amostra de reclamações é usada transversalmente para entender temas, severidade e agrupamentos. Ela não é tratada como série histórica 2021–2025.</p>
+          <p>A amostra de reclamações é usada transversalmente para entender temas, severidade e agrupamentos. Ela não é tratada como série histórica 2021–2026*.</p>
         </div>
 
         <div class="mini-metrics">
@@ -276,29 +300,29 @@
           <p class="eyebrow dark">05 · Metodologia e arquitetura</p>
           <h2>Dados primeiro, apresentação depois</h2>
         </div>
-        <p>O produto público e o dashboard Streamlit consomem a mesma camada tratada. Os arquivos brutos e processados necessários são versionados no próprio repositório.</p>
+        <p>O produto público e o dashboard Streamlit consomem a mesma camada tratada (2021–2026*). Os arquivos brutos e processados necessários são versionados no próprio repositório.</p>
       </div>
 
       <div class="method-grid">
         <article class="method-card">
           <span>01</span>
           <h3>Fontes rastreáveis</h3>
-          <p>Resultados financeiros Nu/SEC, dados prudenciais do Pilar 3 e amostra pública de reclamações.</p>
+          <p>Resultados financeiros Nu/SEC (Form 20-F anuais e Form 6-K trimestrais 1T25–2T26), dados prudenciais do Pilar 3 e amostra pública de reclamações.</p>
         </article>
         <article class="method-card">
           <span>02</span>
-          <h3>Python + Pandas</h3>
-          <p>Ingestão, padronização, tratamento das unidades e reconstrução do histórico regulatório.</p>
+          <h3>Grão trimestral e 2026*</h3>
+          <p>Reconciliação dos 4 trimestres de 2025 com o 20-F 2025 e separação estrita de 2026* (parcial até 2T26) em LTM e YTD.</p>
         </article>
         <article class="method-card">
           <span>03</span>
           <h3>SQLite + SQL</h3>
-          <p>Camada analítica reproduzível para consultas de crescimento, rentabilidade, risco e experiência do cliente.</p>
+          <p>Camada analítica reproduzível com views de LTM, YTD vs. 2025 e estoques no último trimestre disponível.</p>
         </article>
         <article class="method-card">
           <span>04</span>
           <h3>Validação + CI</h3>
-          <p>GitHub Actions compila o código, valida os datasets e testa a reconstrução dos dados regulatórios.</p>
+          <p>GitHub Actions compila o código, valida reconciliação, unicidade, moedas e URLs da SEC e executa testes automatizados.</p>
         </article>
       </div>
 
@@ -316,10 +340,10 @@
       </article>
 
       <div class="limitations">
+        <div><strong>2026* como ano parcial.</strong><span>O Form 20-F de 2026 só sai em 2027. Nunca comparamos 2026 parcial (até 2T26) diretamente com anos fechados sem usar LTM ou YTD equivalente.</span></div>
         <div><strong>IFRS como referência.</strong><span>Métricas ajustadas são complementares e identificadas separadamente.</span></div>
-        <div><strong>Sem mistura de moedas.</strong><span>US$ e R$ permanecem separados conforme a natureza da fonte.</span></div>
-        <div><strong>Sem causalidade inventada.</strong><span>Anomalias são sinais de investigação, não explicações automáticas.</span></div>
-        <div><strong>Amostra de reclamações.</strong><span>Não é usada para afirmar tendência temporal entre 2021 e 2025.</span></div>
+        <div><strong>Sem mistura de moedas.</strong><span>US$ (resultados SEC) e R$ (capital e RWA do Pilar 3) permanecem separados conforme a fonte.</span></div>
+        <div><strong>Amostra de reclamações.</strong><span>Não é usada para afirmar tendência temporal entre 2021 e 2026*.</span></div>
       </div>
     </section>
   </main>
@@ -327,8 +351,8 @@
   <footer>
     <div class="shell footer-wrap">
       <div>
-        <strong>Nubank em Dados</strong>
-        <p>Projeto independente de portfólio. Não afiliado à Nu Holdings Ltd. Não constitui recomendação de investimento.</p>
+        <strong>Nubank em Dados · 2021–2026*</strong>
+        <p>*2026 refere-se ao ano parcial até 2T26 (30/06/2026), com fluxos tratados em LTM (3T25–2T26) ou YTD (1S26 vs. 1S25) e estoques em 2T26. Projeto independente de portfólio, não afiliado à Nu Holdings Ltd.</p>
       </div>
       <a href="https://github.com/pfutagawa/nubank-financial-analysis-ds" target="_blank" rel="noreferrer">GitHub · pfutagawa</a>
     </div>

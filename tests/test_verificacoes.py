@@ -205,5 +205,70 @@ class TestIndiceDuplicatas(unittest.TestCase):
         self.assertFalse(success, "Deveria retornar False se duplicatas impedirem criação de índice único")
 
 
+class TestAtualizacao2026ReconciliacaoEMetricas(unittest.TestCase):
+    def test_reconciliacao_2025_trimestral_vs_20f(self):
+        from src.validate_data import validate_financial_quarterly
+
+        reconciliation = validate_financial_quarterly()
+        self.assertLessEqual(reconciliation["diff_revenue_2025"], 0.01)
+        self.assertLessEqual(reconciliation["diff_net_income_2025"], 0.01)
+
+    def test_sem_periodos_duplicados_e_parcial_2026(self):
+        from src.data_pipeline import load_financial_history, load_financial_quarterly
+
+        annual = load_financial_history()
+        quarterly = load_financial_quarterly()
+
+        self.assertTrue(annual["year"].is_unique)
+        self.assertEqual(annual["year"].tolist(), [2021, 2022, 2023, 2024, 2025])
+        self.assertTrue(quarterly["periodo_fim"].is_unique)
+        self.assertTrue(quarterly["trimestre"].is_unique)
+
+        q_2026 = quarterly[quarterly["ano"] == 2026]
+        self.assertFalse(q_2026.empty)
+        self.assertTrue((q_2026["parcial"] == "sim").all())
+
+        q_2025 = quarterly[quarterly["ano"] == 2025]
+        self.assertEqual(len(q_2025), 4)
+        self.assertTrue((q_2025["parcial"] == "não").all())
+
+    def test_moedas_unidades_e_fonte_url_obrigatorios(self):
+        from src.data_pipeline import load_financial_quarterly, load_risk_detail_by_period
+
+        quarterly = load_financial_quarterly()
+        self.assertTrue((quarterly["moeda"] == "USD").all())
+        self.assertTrue(quarterly["unidade"].notna().all())
+        self.assertTrue(quarterly["fonte_url"].str.startswith("https://www.sec.gov/").all())
+
+        risk_detail = load_risk_detail_by_period()
+        self.assertTrue(risk_detail["period"].is_unique)
+        self.assertTrue((risk_detail["moeda"] == "BRL").all())
+        self.assertTrue(risk_detail["source_url"].notna().all())
+
+    def test_metricas_2026_ltm_ytd_e_estoques(self):
+        from src.data_pipeline import compute_metrics_2026
+
+        metrics = compute_metrics_2026()
+        self.assertEqual(metrics["reference_quarter"], "2T26")
+        self.assertEqual(metrics["partial_label"], "parcial até 2T26")
+
+        # LTM = 3T25 + 4T25 + 1T26 + 2T26
+        self.assertEqual(metrics["ltm"]["quarters_included"], ["3T25", "4T25", "1T26", "2T26"])
+        self.assertAlmostEqual(metrics["ltm"]["revenue_usd_b"], 19.3398, places=3)
+        self.assertAlmostEqual(metrics["ltm"]["net_income_usd_b"], 3.6107, places=3)
+
+        # YTD 2026 (1T26 + 2T26) vs YTD 2025 (1T25 + 2T25)
+        self.assertEqual(metrics["ytd_comparison"]["quarters_2026"], ["1T26", "2T26"])
+        self.assertEqual(metrics["ytd_comparison"]["quarters_2025"], ["1T25", "2T25"])
+        self.assertAlmostEqual(metrics["ytd_comparison"]["revenue_2026_usd_b"], 10.4812, places=3)
+        self.assertAlmostEqual(metrics["ytd_comparison"]["revenue_2025_usd_b"], 6.9162, places=3)
+
+        # Estoques do último trimestre disponível (2T26)
+        self.assertEqual(metrics["stocks_latest"]["trimestre_referencia"], "2T26")
+        self.assertAlmostEqual(metrics["stocks_latest"]["clientes_m"], 139.0, places=1)
+        self.assertAlmostEqual(metrics["stocks_latest"]["depositos_usd_b"], 45.3, places=1)
+        self.assertAlmostEqual(metrics["stocks_latest"]["carteira_credito_usd_b"], 39.4, places=1)
+
+
 if __name__ == "__main__":
     unittest.main()
